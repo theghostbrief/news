@@ -33,3 +33,5 @@ credentials.json
 secrets/
 .fb-profile/
 .chrome-debug-profile/
+.handoffs/local/
+.handoffs/*.local.md
