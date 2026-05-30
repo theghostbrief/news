@@ -40,6 +40,17 @@ export async function generateDigest(db, articles, config) {
 
   log.push(`Starting digest generation for ${articles.length} articles`);
 
+  // Select Phase A system prompt by active scenario. Assembly (Phase B) is
+  // scenario-independent and always uses config.assemblyPrompt.
+  const scenario = config.activeScenario || 'sarcastic';
+  let commentarySystem = scenario === 'architect' ? config.deepPrompt : config.commentaryPrompt;
+  if (scenario === 'architect' && (!config.deepPrompt || !config.deepPrompt.trim())) {
+    commentarySystem = config.commentaryPrompt;
+    log.push('Scenario: architect requested but deepPrompt is empty — falling back to commentaryPrompt');
+  } else {
+    log.push(`Scenario: ${scenario}`);
+  }
+
   // Phase A: Generate commentary for each article
   for (const article of articles) {
     if (article.commentary) {
@@ -59,7 +70,7 @@ export async function generateDigest(db, articles, config) {
       const response = await callClaudeWithRetry(client, {
         model: config.claudeModel,
         max_tokens: 512,
-        system: config.commentaryPrompt,
+        system: commentarySystem,
         messages: [{ role: 'user', content: userMessage }],
       });
 

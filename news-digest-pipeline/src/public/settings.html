@@ -274,6 +274,79 @@
     .status.ok { color: #16a34a; }
     .status.err { color: #ef4444; }
 
+    .purpose {
+      font-size: 12.5px;
+      color: #8a8580;
+      line-height: 1.6;
+      margin-bottom: 12px;
+      padding: 10px 12px;
+      background: #faf9f7;
+      border: 1px solid #e8e4df;
+      border-radius: 9px;
+    }
+    .purpose b { color: #6b6660; font-weight: 600; }
+
+    /* Scenario cards */
+    .scenario-card {
+      display: block;
+      width: 100%;
+      text-align: left;
+      border: 1px solid #ddd8d0;
+      border-radius: 12px;
+      padding: 16px 18px;
+      margin-bottom: 12px;
+      background: #ffffff;
+      cursor: pointer;
+      transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
+    }
+    .scenario-card:hover { border-color: #b8a4e8; }
+    .scenario-card.selected {
+      border-color: #7c3aed;
+      background: rgba(124,58,237,0.04);
+      box-shadow: 0 0 0 2px rgba(124,58,237,0.12);
+    }
+    .scenario-head {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 6px;
+    }
+    .scenario-radio {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      border: 2px solid #ddd8d0;
+      flex: 0 0 auto;
+      position: relative;
+      transition: border-color 0.15s;
+    }
+    .scenario-card.selected .scenario-radio { border-color: #7c3aed; }
+    .scenario-card.selected .scenario-radio::after {
+      content: '';
+      position: absolute;
+      inset: 3px;
+      border-radius: 50%;
+      background: #7c3aed;
+    }
+    .scenario-name { font-size: 15px; font-weight: 600; color: #2d2a26; }
+    .scenario-subtitle { font-size: 12px; color: #8a8580; }
+    .badge.serious {
+      background: rgba(124,58,237,0.1);
+      color: #7c3aed;
+      border: 1px solid rgba(124,58,237,0.25);
+    }
+    .badge.current {
+      background: rgba(59,130,246,0.08);
+      color: #2563eb;
+      border: 1px solid rgba(59,130,246,0.22);
+    }
+    .scenario-desc {
+      font-size: 13px;
+      color: #6b6660;
+      line-height: 1.6;
+      margin-left: 26px;
+    }
+
     .help-block { margin-bottom: 18px; }
     .help-block h3 {
       font-size: 14px;
@@ -345,11 +418,13 @@
       { id: 'deep',       title: 'Глубокий промпт' },
       { id: 'content',    title: 'Контент' },
       { id: 'publishing', title: 'Публикация' },
+      { id: 'scenarios',  title: 'Сценарии' },
       { id: 'help',       title: 'Помощь' },
     ];
 
     let DATA = null;
     let active = 'general';
+    let selectedScenario = null;
 
     function esc(s) {
       return String(s == null ? '' : s)
@@ -376,11 +451,15 @@
       });
     }
 
-    function textareaCard(id, title, desc, value) {
+    function textareaCard(id, title, desc, value, purpose) {
+      const purposeHtml = purpose
+        ? `<div class="purpose"><b>Назначение:</b> ${esc(purpose)}</div>`
+        : '';
       return `
         <div class="card active">
           <h2>${title}</h2>
           <p class="card-desc">${desc}</p>
+          ${purposeHtml}
           <div class="field">
             <textarea class="mono" id="ta-${id}">${esc(value)}</textarea>
           </div>
@@ -466,15 +545,18 @@
       } else if (active === 'commentary') {
         html = textareaCard('commentary', 'Стиль комментариев',
           'Системный промпт для генерации авторского комментария к каждой статье (prompt.md).',
-          d.commentary.text);
+          d.commentary.text,
+          'системный промпт Фазы A — генерация авторского комментария к каждой статье. Задаёт тон и правила переписывания. Используется, когда активен сценарий «Сарказм».');
       } else if (active === 'assembly') {
         html = textareaCard('assembly', 'Сборка дайджеста',
           'Системный промпт для сборки готовых комментариев в итоговый дайджест (assembly_prompt.md).',
-          d.assembly.text);
+          d.assembly.text,
+          'системный промпт Фазы B — механическая сборка готовых комментариев в финальный дайджест (нумерация, вставка упоминания курса, граница, хэштеги). Не творческий этап, общий для всех сценариев.');
       } else if (active === 'deep') {
         html = textareaCard('deep', 'Глубокий промпт',
           'Расширенный промпт для глубокой обработки (prompt_deep.md).',
-          d.deep.text);
+          d.deep.text,
+          'альтернативный системный промпт Фазы A — глубокая техно-философская аналитика («Архитектор»). Применяется, когда в разделе «Сценарии» выбран серьёзный сценарий.');
       } else if (active === 'content') {
         const c = d.content;
         const p = c.parsed || {};
@@ -512,6 +594,38 @@
             ${secretRow('Anthropic API Key', pub.anthropicApiKey)}
             ${secretRow('Fal Key', pub.falKey)}
           </div>`;
+      } else if (active === 'scenarios') {
+        const sc = d.scenarios;
+        if (selectedScenario === null) selectedScenario = sc.active;
+        const cards = sc.options.map((o) => {
+          const isSel = o.id === selectedScenario;
+          const isActive = o.id === sc.active;
+          const badge = o.id === 'architect'
+            ? `<span class="badge serious">мощный режим</span>`
+            : `<span class="badge current">текущий</span>`;
+          const activeMark = isActive ? `<span class="badge on">активен</span>` : '';
+          return `
+            <button class="scenario-card ${isSel ? 'selected' : ''}" data-scenario="${esc(o.id)}">
+              <div class="scenario-head">
+                <span class="scenario-radio"></span>
+                <span class="scenario-name">${esc(o.name)}</span>
+                ${badge}
+                ${activeMark}
+                <span class="scenario-subtitle">${esc(o.subtitle)}</span>
+              </div>
+              <div class="scenario-desc">${esc(o.description)}</div>
+            </button>`;
+        }).join('');
+        html = `
+          <div class="card active">
+            <h2>Сценарии</h2>
+            <p class="card-desc">Сценарий определяет системный промпт Фазы A (генерация авторских комментариев). Сборка дайджеста (Фаза B) общая и от выбора не зависит.</p>
+            ${cards}
+            <div class="save-bar">
+              <button class="btn btn-primary" id="save-scenarios">Сохранить</button>
+              <span class="status" id="status-scenarios"></span>
+            </div>
+          </div>`;
       } else if (active === 'help') {
         html = `
           <div class="card active">
@@ -524,6 +638,7 @@
             <div class="help-block"><h3>Глубокий промпт</h3><p>Расширенный промпт для углублённой обработки материалов.</p></div>
             <div class="help-block"><h3>Контент</h3><p>Оформление дайджеста: основной хэштег, текст упоминания курса, граница/дисклеймер и хэштеги в конце поста.</p></div>
             <div class="help-block"><h3>Публикация</h3><p>Токены Telegram, Facebook и API-ключи. Управляют тем, куда и от чьего имени публикуются дайджесты.</p></div>
+            <div class="help-block"><h3>Сценарии</h3><p>Переключатель сценария меняет системный промпт Фазы A (генерация авторских комментариев): «Сарказм» использует prompt.md, «Архитектор» — prompt_deep.md. Сборка дайджеста (Фаза B) одинакова для всех сценариев.</p></div>
             <div class="help-note">
               <b>Важно.</b> Секреты (токены, ключи) редактируются только в файле <code>.env</code> на сервере — этот интерфейс их не меняет.
               Параметр <b>Интервал проверки очереди</b> применяется только после рестарта сервера; остальные значения подхватываются сразу после сохранения.
@@ -533,6 +648,18 @@
 
       panel.innerHTML = html;
       bindSave(active);
+      if (active === 'scenarios') bindScenarioCards();
+    }
+
+    function bindScenarioCards() {
+      document.querySelectorAll('.scenario-card').forEach((el) => {
+        el.onclick = () => {
+          selectedScenario = el.dataset.scenario;
+          document.querySelectorAll('.scenario-card').forEach((c) => {
+            c.classList.toggle('selected', c.dataset.scenario === selectedScenario);
+          });
+        };
+      });
     }
 
     function bindSave(id) {
@@ -556,6 +683,7 @@
       if (id === 'assembly')   return { assembly:   { text: document.getElementById('ta-assembly').value } };
       if (id === 'deep')       return { deep:       { text: document.getElementById('ta-deep').value } };
       if (id === 'content')    return { content:    { text: document.getElementById('ta-content').value } };
+      if (id === 'scenarios')  return { activeScenario: selectedScenario };
       return {};
     }
 

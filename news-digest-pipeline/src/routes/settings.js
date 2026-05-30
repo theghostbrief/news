@@ -14,7 +14,26 @@ const ENV_WRITABLE = {
   articleThreshold: 'ARTICLE_THRESHOLD',
   maxArticlesPerDigest: 'MAX_ARTICLES_PER_DIGEST',
   checkIntervalMs: 'CHECK_INTERVAL_MS',
+  activeScenario: 'ACTIVE_SCENARIO',
 };
+
+const SCENARIO_OPTIONS = [
+  {
+    id: 'sarcastic',
+    name: 'Сарказм',
+    subtitle: 'текущий',
+    promptFile: 'prompt.md',
+    description: 'Саркастичный, неформальный, скептический авторский тон. Системный промпт Фазы A берётся из prompt.md.',
+  },
+  {
+    id: 'architect',
+    name: 'Архитектор',
+    subtitle: 'серьёзный · ещё не использовался',
+    promptFile: 'prompt_deep.md',
+    description: 'Холодный интеллект, техно-философия, метод «отъезжающей камеры». Системный промпт Фазы A берётся из prompt_deep.md.',
+  },
+];
+const SCENARIO_IDS = SCENARIO_OPTIONS.map((o) => o.id);
 
 /**
  * Mask a secret value. Returns { configured, hint } and never the raw secret.
@@ -49,6 +68,10 @@ function buildSettingsPayload() {
     commentary: { text: config.commentaryPrompt, editable: true },
     assembly: { text: config.assemblyPrompt, editable: true },
     deep: { text: config.deepPrompt, editable: true },
+    scenarios: {
+      active: config.activeScenario || 'sarcastic',
+      options: SCENARIO_OPTIONS,
+    },
     content: {
       text: config.configMdRaw,
       editable: true,
@@ -174,6 +197,16 @@ function validatePatch(body) {
   intField('articleThreshold', 1, 100);
   intField('maxArticlesPerDigest', 1, 100);
   intField('checkIntervalMs', 5000, 3600000);
+
+  // --- scenario selector ---
+  if (body.activeScenario !== undefined) {
+    const v = body.activeScenario;
+    if (typeof v !== 'string' || !SCENARIO_IDS.includes(v)) {
+      errors.push(`activeScenario: должно быть одним из ${SCENARIO_IDS.join(', ')}`);
+    } else {
+      env[ENV_WRITABLE.activeScenario] = v;
+    }
+  }
 
   // --- text/file fields ---
   const textField = (name, targetPath) => {

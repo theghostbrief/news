@@ -93,6 +93,10 @@ function buildConfig() {
     checkIntervalMs: parseInt(process.env.CHECK_INTERVAL_MS || '60000', 10),
     nodeEnv: process.env.NODE_ENV || 'development',
 
+    // Active commentary scenario for Phase A: 'sarcastic' (prompt.md) or
+    // 'architect' (prompt_deep.md). Assembly (Phase B) is scenario-independent.
+    activeScenario: process.env.ACTIVE_SCENARIO || 'sarcastic',
+
     // Publishers
     facebookPageId: process.env.FACEBOOK_PAGE_ID || '',
     facebookPageAccessToken: process.env.FACEBOOK_PAGE_ACCESS_TOKEN || '',
