@@ -26,9 +26,20 @@ function safeCompare(a, b) {
   return timingSafeEqual(bufA, bufB);
 }
 
+/**
+ * Auth is enforced only in production. Locally (NODE_ENV !== 'production')
+ * the dashboard and API are open so the login prompt doesn't get in the way.
+ * The deployed instance runs with NODE_ENV=production and stays protected.
+ */
+function authDisabled() {
+  return process.env.NODE_ENV !== 'production';
+}
+
 export function apiAuth(req, res, next) {
   // Telegram webhook has its own auth via X-Telegram-Bot-Api-Secret-Token
   if (req.path.startsWith('/telegram/') || req.path.startsWith('/api/telegram/')) return next();
+
+  if (authDisabled()) return next();
 
   const expectedKey = process.env.API_SECRET_KEY;
   if (!expectedKey) return next(); // dev mode
@@ -63,6 +74,8 @@ export function apiAuth(req, res, next) {
 }
 
 export function dashboardAuth(req, res, next) {
+  if (authDisabled()) return next();
+
   const expectedPass = process.env.DASHBOARD_PASSWORD || process.env.API_SECRET_KEY;
   if (!expectedPass) return next(); // dev mode
 
