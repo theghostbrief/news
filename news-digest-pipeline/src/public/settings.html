@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Настройки · News Digest</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f5f3ef;
+      color: #2d2a26;
+      padding: 24px;
+      min-height: 100vh;
+      font-size: 15px;
+    }
+
+    .container { max-width: 1060px; margin: 0 auto; }
+
+    /* Header */
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 6px;
+      gap: 12px;
+    }
+    h1 {
+      font-size: 32px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+      color: #2d2a26;
+    }
+    .subtitle {
+      color: #8a8580;
+      font-size: 15px;
+      margin-bottom: 22px;
+    }
+
+    /* Buttons */
+    .btn {
+      border: none;
+      padding: 8px 16px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+      font-family: 'Inter', sans-serif;
+      transition: all 0.2s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      text-decoration: none;
+    }
+    .btn-ghost {
+      background: transparent;
+      color: #8a8580;
+      border: 1px solid #ddd8d0;
+    }
+    .btn-ghost:hover {
+      border-color: #7c3aed;
+      color: #7c3aed;
+      box-shadow: 0 0 10px rgba(124,58,237,0.1);
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, #7c3aed, #3b82f6);
+      color: #fff;
+      border: none;
+    }
+    .btn-primary:hover {
+      box-shadow: 0 0 16px rgba(124,58,237,0.3);
+      transform: translateY(-1px);
+    }
+    .btn-primary:disabled {
+      opacity: 0.5;
+      cursor: default;
+      transform: none;
+      box-shadow: none;
+    }
+
+    /* Layout */
+    .layout {
+      display: grid;
+      grid-template-columns: 230px 1fr;
+      gap: 20px;
+      align-items: start;
+    }
+
+    /* Left nav */
+    .nav {
+      background: #ffffff;
+      border: 1px solid #e8e4df;
+      border-radius: 14px;
+      padding: 8px;
+      position: sticky;
+      top: 24px;
+    }
+    .nav-item {
+      display: block;
+      width: 100%;
+      text-align: left;
+      padding: 10px 14px;
+      border-radius: 9px;
+      border: none;
+      background: transparent;
+      color: #6b6660;
+      font-size: 14px;
+      font-weight: 500;
+      font-family: 'Inter', sans-serif;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .nav-item:hover { background: #faf9f7; color: #2d2a26; }
+    .nav-item.active {
+      background: rgba(124,58,237,0.08);
+      color: #7c3aed;
+      font-weight: 600;
+    }
+
+    /* Content panel */
+    .panel { min-width: 0; }
+    .card {
+      background: #ffffff;
+      border: 1px solid #e8e4df;
+      border-radius: 14px;
+      padding: 24px;
+      display: none;
+    }
+    .card.active { display: block; }
+    .card h2 {
+      font-size: 19px;
+      font-weight: 600;
+      letter-spacing: -0.2px;
+      margin-bottom: 4px;
+    }
+    .card .card-desc {
+      color: #8a8580;
+      font-size: 13.5px;
+      line-height: 1.6;
+      margin-bottom: 20px;
+    }
+
+    .field { margin-bottom: 18px; }
+    .field label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      color: #6b6660;
+      margin-bottom: 6px;
+    }
+    .field .hint {
+      font-size: 12px;
+      color: #b0aaa4;
+      margin-top: 5px;
+      line-height: 1.5;
+    }
+
+    input[type="text"], input[type="number"], textarea {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid #ddd8d0;
+      border-radius: 8px;
+      font-size: 14px;
+      font-family: 'Inter', sans-serif;
+      color: #2d2a26;
+      background: #ffffff;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    input:focus, textarea:focus {
+      border-color: #7c3aed;
+      box-shadow: 0 0 0 2px rgba(124,58,237,0.12);
+    }
+    input[readonly], textarea[readonly] {
+      background: #f7f5f2;
+      color: #8a8580;
+      cursor: default;
+    }
+    textarea {
+      min-height: 320px;
+      resize: vertical;
+      line-height: 1.6;
+      font-size: 13.5px;
+    }
+    textarea.mono {
+      font-family: 'Inter', ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+
+    .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+    /* Secret rows */
+    .secret-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 11px 14px;
+      border: 1px solid #e8e4df;
+      border-radius: 9px;
+      margin-bottom: 8px;
+      background: #faf9f7;
+    }
+    .secret-label { font-size: 13.5px; font-weight: 500; color: #2d2a26; }
+    .secret-meta { display: flex; align-items: center; gap: 10px; }
+    .secret-hint {
+      font-size: 13px;
+      color: #8a8580;
+      font-variant-numeric: tabular-nums;
+    }
+    .badge {
+      font-size: 11px;
+      font-weight: 600;
+      padding: 3px 9px;
+      border-radius: 20px;
+      letter-spacing: 0.2px;
+    }
+    .badge.on {
+      background: rgba(34,197,94,0.1);
+      color: #16a34a;
+      border: 1px solid rgba(34,197,94,0.25);
+    }
+    .badge.off {
+      background: rgba(245,158,11,0.08);
+      color: #d97706;
+      border: 1px solid rgba(245,158,11,0.25);
+    }
+    .group-subtitle {
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: #8a8580;
+      margin: 18px 0 10px;
+    }
+    .group-subtitle:first-of-type { margin-top: 0; }
+
+    .preview-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 8px;
+      margin-top: 14px;
+      padding: 14px;
+      background: #faf9f7;
+      border: 1px solid #e8e4df;
+      border-radius: 10px;
+    }
+    .preview-grid .pv {
+      font-size: 13px;
+      line-height: 1.5;
+      color: #6b6660;
+    }
+    .preview-grid .pv b { color: #2d2a26; font-weight: 600; }
+
+    /* Save bar */
+    .save-bar {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-top: 22px;
+      padding-top: 18px;
+      border-top: 1px solid #e8e4df;
+    }
+    .status {
+      font-size: 13.5px;
+      font-weight: 500;
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+    .status.show { opacity: 1; }
+    .status.ok { color: #16a34a; }
+    .status.err { color: #ef4444; }
+
+    .help-block { margin-bottom: 18px; }
+    .help-block h3 {
+      font-size: 14px;
+      font-weight: 600;
+      color: #2d2a26;
+      margin-bottom: 4px;
+    }
+    .help-block p {
+      font-size: 13.5px;
+      color: #6b6660;
+      line-height: 1.6;
+    }
+    .help-note {
+      margin-top: 8px;
+      padding: 12px 14px;
+      background: rgba(124,58,237,0.05);
+      border: 1px solid rgba(124,58,237,0.12);
+      border-radius: 10px;
+      font-size: 13px;
+      color: #6b6660;
+      line-height: 1.6;
+    }
+    .loading { padding: 40px; text-align: center; color: #b0aaa4; }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 8px; }
+    ::-webkit-scrollbar-track { background: #f5f3ef; }
+    ::-webkit-scrollbar-thumb { background: #ddd8d0; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #b0aaa4; }
+
+    @media (max-width: 768px) {
+      body { padding: 14px; }
+      h1 { font-size: 24px; }
+      .layout { grid-template-columns: 1fr; }
+      .nav {
+        position: static;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+      }
+      .nav-item { width: auto; flex: 1 1 auto; text-align: center; }
+      .row2 { grid-template-columns: 1fr; }
+      .card { padding: 18px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>Настройки</h1>
+      <a class="btn btn-ghost" href="index.html">← К дашборду</a>
+    </div>
+    <p class="subtitle" id="subtitle">Конфигурация пайплайна и промптов</p>
+
+    <div id="loading" class="loading">Загрузка настроек…</div>
+
+    <div class="layout" id="layout" style="display:none">
+      <nav class="nav" id="nav"></nav>
+      <div class="panel" id="panel"></div>
+    </div>
+  </div>
+
+  <script>
+    const GROUPS = [
+      { id: 'general',    title: 'Общие' },
+      { id: 'queue',      title: 'Очередь и генерация' },
+      { id: 'commentary', title: 'Стиль комментариев' },
+      { id: 'assembly',   title: 'Сборка дайджеста' },
+      { id: 'deep',       title: 'Глубокий промпт' },
+      { id: 'content',    title: 'Контент' },
+      { id: 'publishing', title: 'Публикация' },
+      { id: 'help',       title: 'Помощь' },
+    ];
+
+    let DATA = null;
+    let active = 'general';
+
+    function esc(s) {
+      return String(s == null ? '' : s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    async function load() {
+      const res = await fetch('/api/settings');
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      DATA = await res.json();
+      document.getElementById('loading').style.display = 'none';
+      document.getElementById('layout').style.display = 'grid';
+      renderNav();
+      renderPanel();
+    }
+
+    function renderNav() {
+      document.getElementById('nav').innerHTML = GROUPS.map((g) =>
+        `<button class="nav-item ${g.id === active ? 'active' : ''}" data-id="${g.id}">${g.title}</button>`
+      ).join('');
+      document.querySelectorAll('.nav-item').forEach((el) => {
+        el.onclick = () => { active = el.dataset.id; renderNav(); renderPanel(); };
+      });
+    }
+
+    function textareaCard(id, title, desc, value) {
+      return `
+        <div class="card active">
+          <h2>${title}</h2>
+          <p class="card-desc">${desc}</p>
+          <div class="field">
+            <textarea class="mono" id="ta-${id}">${esc(value)}</textarea>
+          </div>
+          ${saveBar(id)}
+        </div>`;
+    }
+
+    function saveBar(id) {
+      return `
+        <div class="save-bar">
+          <button class="btn btn-primary" id="save-${id}">Сохранить</button>
+          <span class="status" id="status-${id}"></span>
+        </div>`;
+    }
+
+    function secretRow(label, masked) {
+      const on = masked && masked.configured;
+      return `
+        <div class="secret-row">
+          <span class="secret-label">${label}</span>
+          <span class="secret-meta">
+            <span class="secret-hint">${on ? esc(masked.hint) : '—'}</span>
+            <span class="badge ${on ? 'on' : 'off'}">${on ? 'настроено' : 'не настроено'}</span>
+          </span>
+        </div>`;
+    }
+
+    function renderPanel() {
+      const panel = document.getElementById('panel');
+      const d = DATA;
+      let html = '';
+
+      if (active === 'general') {
+        const g = d.general;
+        html = `
+          <div class="card active">
+            <h2>Общие</h2>
+            <p class="card-desc">Базовые параметры приложения. Модель Claude используется для генерации комментариев и сборки.</p>
+            <div class="field">
+              <label>Модель Claude (CLAUDE_MODEL)</label>
+              <input type="text" id="f-claudeModel" value="${esc(g.claudeModel.value)}">
+              <div class="hint">Например: claude-sonnet-4-20250514</div>
+            </div>
+            <div class="field">
+              <label>Окружение (NODE_ENV)</label>
+              <input type="text" value="${esc(g.nodeEnv.value)}" readonly>
+            </div>
+            <div class="field">
+              <label>Base URL</label>
+              <input type="text" value="${esc(g.baseUrl.value)}" readonly>
+            </div>
+            <div class="field">
+              <label>Путь к БД (DB_PATH)</label>
+              <input type="text" value="${esc(g.dbPath.value)}" readonly>
+            </div>
+            ${saveBar('general')}
+          </div>`;
+      } else if (active === 'queue') {
+        const q = d.queue;
+        html = `
+          <div class="card active">
+            <h2>Очередь и генерация</h2>
+            <p class="card-desc">Когда в очереди накопится достаточно статей, пайплайн автоматически собирает дайджест.</p>
+            <div class="row2">
+              <div class="field">
+                <label>Порог статей (ARTICLE_THRESHOLD)</label>
+                <input type="number" id="f-articleThreshold" min="1" max="100" value="${esc(q.articleThreshold.value)}">
+                <div class="hint">Сколько новых статей запускают генерацию (1–100)</div>
+              </div>
+              <div class="field">
+                <label>Макс. статей в дайджесте (MAX_ARTICLES_PER_DIGEST)</label>
+                <input type="number" id="f-maxArticlesPerDigest" min="1" max="100" value="${esc(q.maxArticlesPerDigest.value)}">
+                <div class="hint">Верхняя граница статей на один дайджест (1–100)</div>
+              </div>
+            </div>
+            <div class="field">
+              <label>Интервал проверки очереди, мс (CHECK_INTERVAL_MS)</label>
+              <input type="number" id="f-checkIntervalMs" min="5000" max="3600000" step="1000" value="${esc(q.checkIntervalMs.value)}">
+              <div class="hint">${esc(q.checkIntervalMs.note || '')} (5000–3600000)</div>
+            </div>
+            ${saveBar('queue')}
+          </div>`;
+      } else if (active === 'commentary') {
+        html = textareaCard('commentary', 'Стиль комментариев',
+          'Системный промпт для генерации авторского комментария к каждой статье (prompt.md).',
+          d.commentary.text);
+      } else if (active === 'assembly') {
+        html = textareaCard('assembly', 'Сборка дайджеста',
+          'Системный промпт для сборки готовых комментариев в итоговый дайджест (assembly_prompt.md).',
+          d.assembly.text);
+      } else if (active === 'deep') {
+        html = textareaCard('deep', 'Глубокий промпт',
+          'Расширенный промпт для глубокой обработки (prompt_deep.md).',
+          d.deep.text);
+      } else if (active === 'content') {
+        const c = d.content;
+        const p = c.parsed || {};
+        html = `
+          <div class="card active">
+            <h2>Контент</h2>
+            <p class="card-desc">Настройки оформления дайджеста: хэштеги, упоминание курса, граница/дисклеймер (config.md).</p>
+            <div class="field">
+              <textarea class="mono" id="ta-content">${esc(c.text)}</textarea>
+            </div>
+            <div class="group-subtitle">Распарсенные значения (только для справки)</div>
+            <div class="preview-grid">
+              <div class="pv"><b>Хэштег:</b> ${esc(p.hashtag)}</div>
+              <div class="pv"><b>Упоминание курса:</b> ${esc(p.courseMention)}</div>
+              <div class="pv"><b>Граница/дисклеймер:</b> ${esc(p.boundaryIntent)}</div>
+              <div class="pv"><b>Хэштеги в конце:</b> ${esc(p.hashtagsSuffix)}</div>
+            </div>
+            ${saveBar('content')}
+          </div>`;
+      } else if (active === 'publishing') {
+        const pub = d.publishing;
+        html = `
+          <div class="card active">
+            <h2>Публикация</h2>
+            <p class="card-desc">Секреты и токены интеграций. В целях безопасности редактируются только в файле <code>.env</code>, не через этот интерфейс.</p>
+            <div class="group-subtitle">Telegram</div>
+            ${secretRow('Bot Token', pub.telegram.botToken)}
+            ${secretRow('Chat ID', pub.telegram.chatId)}
+            ${secretRow('Publish Chat ID', pub.telegram.publishChatId)}
+            ${secretRow('Webhook Secret', pub.telegram.webhookSecret)}
+            <div class="group-subtitle">Facebook</div>
+            ${secretRow('Page ID', pub.facebook.pageId)}
+            ${secretRow('Page Access Token', pub.facebook.pageAccessToken)}
+            <div class="group-subtitle">API ключи</div>
+            ${secretRow('Anthropic API Key', pub.anthropicApiKey)}
+            ${secretRow('Fal Key', pub.falKey)}
+          </div>`;
+      } else if (active === 'help') {
+        html = `
+          <div class="card active">
+            <h2>Помощь</h2>
+            <p class="card-desc">Что на что влияет.</p>
+            <div class="help-block"><h3>Общие</h3><p>Модель Claude задаёт, какая версия модели используется и для генерации комментариев, и для сборки дайджеста.</p></div>
+            <div class="help-block"><h3>Очередь и генерация</h3><p>Порог статей — сколько новых статей должно накопиться, чтобы автоматически запустить генерацию. Макс. статей — верхняя граница на один дайджест. Интервал — как часто пайплайн проверяет очередь.</p></div>
+            <div class="help-block"><h3>Стиль комментариев</h3><p>Системный промпт, по которому Claude пишет авторский комментарий к каждой статье.</p></div>
+            <div class="help-block"><h3>Сборка дайджеста</h3><p>Системный промпт для сборки готовых комментариев в финальный пост с нумерацией, упоминанием курса и хэштегами.</p></div>
+            <div class="help-block"><h3>Глубокий промпт</h3><p>Расширенный промпт для углублённой обработки материалов.</p></div>
+            <div class="help-block"><h3>Контент</h3><p>Оформление дайджеста: основной хэштег, текст упоминания курса, граница/дисклеймер и хэштеги в конце поста.</p></div>
+            <div class="help-block"><h3>Публикация</h3><p>Токены Telegram, Facebook и API-ключи. Управляют тем, куда и от чьего имени публикуются дайджесты.</p></div>
+            <div class="help-note">
+              <b>Важно.</b> Секреты (токены, ключи) редактируются только в файле <code>.env</code> на сервере — этот интерфейс их не меняет.
+              Параметр <b>Интервал проверки очереди</b> применяется только после рестарта сервера; остальные значения подхватываются сразу после сохранения.
+            </div>
+          </div>`;
+      }
+
+      panel.innerHTML = html;
+      bindSave(active);
+    }
+
+    function bindSave(id) {
+      const btn = document.getElementById('save-' + id);
+      if (!btn) return;
+      btn.onclick = () => save(id, btn);
+    }
+
+    function collectPatch(id) {
+      if (id === 'general') {
+        return { claudeModel: document.getElementById('f-claudeModel').value };
+      }
+      if (id === 'queue') {
+        return {
+          articleThreshold: parseInt(document.getElementById('f-articleThreshold').value, 10),
+          maxArticlesPerDigest: parseInt(document.getElementById('f-maxArticlesPerDigest').value, 10),
+          checkIntervalMs: parseInt(document.getElementById('f-checkIntervalMs').value, 10),
+        };
+      }
+      if (id === 'commentary') return { commentary: { text: document.getElementById('ta-commentary').value } };
+      if (id === 'assembly')   return { assembly:   { text: document.getElementById('ta-assembly').value } };
+      if (id === 'deep')       return { deep:       { text: document.getElementById('ta-deep').value } };
+      if (id === 'content')    return { content:    { text: document.getElementById('ta-content').value } };
+      return {};
+    }
+
+    function showStatus(id, ok, msg) {
+      const el = document.getElementById('status-' + id);
+      if (!el) return;
+      el.textContent = msg;
+      el.className = 'status show ' + (ok ? 'ok' : 'err');
+      if (ok) setTimeout(() => { el.className = 'status'; }, 3000);
+    }
+
+    async function save(id, btn) {
+      btn.disabled = true;
+      const original = btn.textContent;
+      btn.textContent = 'Сохранение…';
+      try {
+        const res = await fetch('/api/settings', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(collectPatch(id)),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          const detail = Array.isArray(data.details) ? data.details.join('; ') : (data.error || 'Ошибка');
+          throw new Error(detail);
+        }
+        DATA = data;
+        showStatus(id, true, 'Сохранено ✓');
+        renderPanel();
+      } catch (err) {
+        showStatus(id, false, 'Ошибка: ' + err.message);
+        btn.disabled = false;
+        btn.textContent = original;
+      }
+    }
+
+    load().catch((err) => {
+      document.getElementById('loading').textContent = 'Не удалось загрузить настройки: ' + err.message;
+    });
+  </script>
+</body>
+</html>

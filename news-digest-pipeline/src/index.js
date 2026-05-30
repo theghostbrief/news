@@ -10,6 +10,7 @@ import healthRouter from './routes/health.js';
 import articlesRouter from './routes/articles.js';
 import digestsRouter from './routes/digests.js';
 import telegramRouter from './routes/telegram.js';
+import settingsRouter from './routes/settings.js';
 import { startQueueManager } from './services/queue-manager.js';
 import { setupTelegramBot } from './services/telegram-bot.js';
 
@@ -78,6 +79,7 @@ app.use('/api/telegram', telegramRouter);
 app.use('/api', apiAuth, apiLimiter);
 
 // API routes with specific rate limits
+app.use('/api/settings', settingsRouter);
 app.use('/api/articles', articlesRouter);
 app.use('/api/digests/generate', generateLimiter);
 app.use('/api/digests/:id/publish', publishLimiter);

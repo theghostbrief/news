@@ -34,6 +34,12 @@
       letter-spacing: -0.5px;
       color: #2d2a26;
     }
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-shrink: 0;
+    }
     .version-badge {
       font-size: 12px;
       font-weight: 500;
@@ -44,6 +50,26 @@
       padding: 3px 10px;
       letter-spacing: 0.3px;
       flex-shrink: 0;
+    }
+    .btn-settings {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 14px;
+      font-weight: 500;
+      font-family: 'Inter', sans-serif;
+      color: #8a8580;
+      background: transparent;
+      border: 1px solid #ddd8d0;
+      border-radius: 8px;
+      padding: 6px 14px;
+      text-decoration: none;
+      transition: all 0.2s ease;
+    }
+    .btn-settings:hover {
+      border-color: #7c3aed;
+      color: #7c3aed;
+      box-shadow: 0 0 10px rgba(124,58,237,0.1);
     }
     .subtitle {
       color: #8a8580;
@@ -406,7 +432,10 @@
   <div class="container">
     <div class="header">
       <h1>News Digest Dashboard</h1>
-      <span class="version-badge">v2.0.4 &middot; 13.04.2026</span>
+      <div class="header-right">
+        <a class="btn-settings" href="settings.html">&#9881; Настройки</a>
+        <span class="version-badge">v2.0.4 &middot; 13.04.2026</span>
+      </div>
     </div>
     <p class="subtitle" id="subtitle">Загрузка...</p>
     <div class="course-banner">

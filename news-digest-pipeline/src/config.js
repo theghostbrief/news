@@ -15,6 +15,17 @@ const promptsDir = existsSync(join(dockerPromptsDir, 'prompt.md'))
   ? dockerPromptsDir
   : newsRoot;
 
+// Absolute paths to all editable source files. Exported so the settings API
+// can read/write the exact same files config.js loads from.
+export const paths = {
+  promptsDir,
+  commentaryPrompt: join(promptsDir, 'prompt.md'),
+  assemblyPrompt: join(promptsDir, 'assembly_prompt.md'),
+  deepPrompt: join(promptsDir, 'prompt_deep.md'),
+  configMd: join(promptsDir, 'config.md'),
+  env: join(parentDir, '.env'),
+};
+
 function readFileOrWarn(filePath, label) {
   try {
     return readFileSync(filePath, 'utf-8');
@@ -59,46 +70,79 @@ function parseConfigMd(text) {
   return result;
 }
 
-const commentaryPrompt = readFileOrWarn(join(promptsDir, 'prompt.md'), 'prompt.md');
-const assemblyPrompt = readFileOrWarn(join(promptsDir, 'assembly_prompt.md'), 'assembly_prompt.md');
-const deepPrompt = readFileOrWarn(join(promptsDir, 'prompt_deep.md'), 'prompt_deep.md');
-const configMdRaw = readFileOrWarn(join(promptsDir, 'config.md'), 'config.md');
-const parsedConfig = parseConfigMd(configMdRaw);
+/**
+ * Build the full settings object from the current environment and source files.
+ * Pure read — does not mutate anything.
+ */
+function buildConfig() {
+  const commentaryPrompt = readFileOrWarn(paths.commentaryPrompt, 'prompt.md');
+  const assemblyPrompt = readFileOrWarn(paths.assemblyPrompt, 'assembly_prompt.md');
+  const deepPrompt = readFileOrWarn(paths.deepPrompt, 'prompt_deep.md');
+  const configMdRaw = readFileOrWarn(paths.configMd, 'config.md');
+  const parsedConfig = parseConfigMd(configMdRaw);
 
-const appConfig = Object.freeze({
-  port: parseInt(process.env.PORT || '3000', 10),
-  anthropicApiKey: process.env.ANTHROPIC_API_KEY || '',
-  claudeModel: process.env.CLAUDE_MODEL || 'claude-sonnet-4-20250514',
-  dbPath: process.env.DB_PATH || './data/news-digest.db',
-  ntfyTopic: process.env.NTFY_TOPIC || '',
-  articleThreshold: parseInt(process.env.ARTICLE_THRESHOLD || '13', 10),
-  maxArticlesPerDigest: parseInt(process.env.MAX_ARTICLES_PER_DIGEST || '17', 10),
-  checkIntervalMs: parseInt(process.env.CHECK_INTERVAL_MS || '60000', 10),
-  nodeEnv: process.env.NODE_ENV || 'development',
+  return {
+    port: parseInt(process.env.PORT || '3000', 10),
+    anthropicApiKey: process.env.ANTHROPIC_API_KEY || '',
+    falKey: process.env.FAL_KEY || '',
+    claudeModel: process.env.CLAUDE_MODEL || 'claude-sonnet-4-20250514',
+    dbPath: process.env.DB_PATH || './data/news-digest.db',
+    ntfyTopic: process.env.NTFY_TOPIC || '',
+    articleThreshold: parseInt(process.env.ARTICLE_THRESHOLD || '13', 10),
+    maxArticlesPerDigest: parseInt(process.env.MAX_ARTICLES_PER_DIGEST || '17', 10),
+    checkIntervalMs: parseInt(process.env.CHECK_INTERVAL_MS || '60000', 10),
+    nodeEnv: process.env.NODE_ENV || 'development',
 
-  // Publishers
-  facebookPageId: process.env.FACEBOOK_PAGE_ID || '',
-  facebookPageAccessToken: process.env.FACEBOOK_PAGE_ACCESS_TOKEN || '',
-  telegramBotToken: process.env.TELEGRAM_BOT_TOKEN || '',
-  telegramChatId: process.env.TELEGRAM_CHAT_ID || '',
-  telegramPublishChatId: process.env.TELEGRAM_PUBLISH_CHAT_ID || '',
-  youtubeAccessToken: process.env.YOUTUBE_ACCESS_TOKEN || '',
-  youtubeChannelId: process.env.YOUTUBE_CHANNEL_ID || '',
+    // Publishers
+    facebookPageId: process.env.FACEBOOK_PAGE_ID || '',
+    facebookPageAccessToken: process.env.FACEBOOK_PAGE_ACCESS_TOKEN || '',
+    telegramBotToken: process.env.TELEGRAM_BOT_TOKEN || '',
+    telegramChatId: process.env.TELEGRAM_CHAT_ID || '',
+    telegramPublishChatId: process.env.TELEGRAM_PUBLISH_CHAT_ID || '',
+    youtubeAccessToken: process.env.YOUTUBE_ACCESS_TOKEN || '',
+    youtubeChannelId: process.env.YOUTUBE_CHANNEL_ID || '',
 
-  // Telegram webhook
-  telegramWebhookSecret: process.env.TELEGRAM_WEBHOOK_SECRET || '',
-  baseUrl: process.env.BASE_URL || '',
+    // Telegram webhook
+    telegramWebhookSecret: process.env.TELEGRAM_WEBHOOK_SECRET || '',
+    baseUrl: process.env.BASE_URL || '',
 
-  // Prompts (loaded from parent directory files)
-  commentaryPrompt,
-  assemblyPrompt,
-  deepPrompt,
+    // Raw config.md text (kept for the settings editor)
+    configMdRaw,
 
-  // Parsed config.md values
-  hashtag: parsedConfig.hashtag,
-  courseMention: parsedConfig.courseMention,
-  boundaryIntent: parsedConfig.boundaryIntent,
-  hashtagsSuffix: parsedConfig.hashtagsSuffix,
-});
+    // Prompts (loaded from parent directory files)
+    commentaryPrompt,
+    assemblyPrompt,
+    deepPrompt,
+
+    // Parsed config.md values
+    hashtag: parsedConfig.hashtag,
+    courseMention: parsedConfig.courseMention,
+    boundaryIntent: parsedConfig.boundaryIntent,
+    hashtagsSuffix: parsedConfig.hashtagsSuffix,
+  };
+}
+
+// Live config object. NOT frozen — importers hold this reference and read
+// properties at call time, so reloadConfig() mutating it in place propagates.
+const appConfig = buildConfig();
+
+/**
+ * Reload configuration in place: re-read .env (override existing process.env),
+ * re-read the four source files, re-parse config.md, then reassign every
+ * property on the SAME appConfig object so existing importers see new values.
+ * Returns the same appConfig reference.
+ */
+export function reloadConfig() {
+  dotenvConfig({ path: paths.env, override: true });
+  const fresh = buildConfig();
+
+  // Drop properties that no longer exist, then copy fresh values in place.
+  for (const key of Object.keys(appConfig)) {
+    if (!(key in fresh)) delete appConfig[key];
+  }
+  Object.assign(appConfig, fresh);
+
+  return appConfig;
+}
 
 export default appConfig;
