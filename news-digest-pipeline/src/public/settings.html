@@ -347,6 +347,25 @@
       margin-left: 26px;
     }
 
+    /* Prompt editor blocks inside Scenarios */
+    .prompt-block {
+      border: 1px solid #e8e4df;
+      border-radius: 12px;
+      padding: 16px 18px;
+      margin-bottom: 14px;
+      background: #fcfbf9;
+    }
+    .prompt-head {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 10px;
+      flex-wrap: wrap;
+    }
+    .prompt-title { font-size: 14px; font-weight: 600; color: #2d2a26; }
+    .prompt-block textarea { min-height: 240px; }
+    .prompt-block .save-bar { margin-top: 14px; padding-top: 14px; }
+
     .help-block { margin-bottom: 18px; }
     .help-block h3 {
       font-size: 14px;
@@ -413,12 +432,9 @@
     const GROUPS = [
       { id: 'general',    title: 'Общие' },
       { id: 'queue',      title: 'Очередь и генерация' },
-      { id: 'commentary', title: 'Стиль комментариев' },
-      { id: 'assembly',   title: 'Сборка дайджеста' },
-      { id: 'deep',       title: 'Глубокий промпт' },
+      { id: 'scenarios',  title: 'Сценарии' },
       { id: 'content',    title: 'Контент' },
       { id: 'publishing', title: 'Публикация' },
-      { id: 'scenarios',  title: 'Сценарии' },
       { id: 'help',       title: 'Помощь' },
     ];
 
@@ -472,6 +488,20 @@
         <div class="save-bar">
           <button class="btn btn-primary" id="save-${id}">Сохранить</button>
           <span class="status" id="status-${id}"></span>
+        </div>`;
+    }
+
+    function promptBlock(id, title, value, purpose, usedNow) {
+      const used = usedNow ? '<span class="badge on">используется сейчас</span>' : '';
+      const purposeHtml = purpose
+        ? `<div class="purpose"><b>Назначение:</b> ${esc(purpose)}</div>`
+        : '';
+      return `
+        <div class="prompt-block">
+          <div class="prompt-head"><span class="prompt-title">${esc(title)}</span>${used}</div>
+          ${purposeHtml}
+          <textarea class="mono" id="ta-${id}">${esc(value)}</textarea>
+          ${saveBar(id)}
         </div>`;
     }
 
@@ -542,21 +572,6 @@
             </div>
             ${saveBar('queue')}
           </div>`;
-      } else if (active === 'commentary') {
-        html = textareaCard('commentary', 'Стиль комментариев',
-          'Системный промпт для генерации авторского комментария к каждой статье (prompt.md).',
-          d.commentary.text,
-          'системный промпт Фазы A — генерация авторского комментария к каждой статье. Задаёт тон и правила переписывания. Используется, когда активен сценарий «Сарказм».');
-      } else if (active === 'assembly') {
-        html = textareaCard('assembly', 'Сборка дайджеста',
-          'Системный промпт для сборки готовых комментариев в итоговый дайджест (assembly_prompt.md).',
-          d.assembly.text,
-          'системный промпт Фазы B — механическая сборка готовых комментариев в финальный дайджест (нумерация, вставка упоминания курса, граница, хэштеги). Не творческий этап, общий для всех сценариев.');
-      } else if (active === 'deep') {
-        html = textareaCard('deep', 'Глубокий промпт',
-          'Расширенный промпт для глубокой обработки (prompt_deep.md).',
-          d.deep.text,
-          'альтернативный системный промпт Фазы A — глубокая техно-философская аналитика («Архитектор»). Применяется, когда в разделе «Сценарии» выбран серьёзный сценарий.');
       } else if (active === 'content') {
         const c = d.content;
         const p = c.parsed || {};
@@ -619,12 +634,27 @@
         html = `
           <div class="card active">
             <h2>Сценарии</h2>
-            <p class="card-desc">Сценарий определяет системный промпт Фазы A (генерация авторских комментариев). Сборка дайджеста (Фаза B) общая и от выбора не зависит.</p>
+            <p class="card-desc">Сценарий определяет системный промпт Фазы A (генерация авторских комментариев к статьям). Сборка дайджеста (Фаза B) общая и от выбора сценария не зависит. Все промпты редактируются здесь же.</p>
+
+            <div class="group-subtitle">Активный сценарий</div>
             ${cards}
             <div class="save-bar">
-              <button class="btn btn-primary" id="save-scenarios">Сохранить</button>
+              <button class="btn btn-primary" id="save-scenarios">Сохранить выбор</button>
               <span class="status" id="status-scenarios"></span>
             </div>
+
+            <div class="group-subtitle">Промпт сценария · взаимоисключающие</div>
+            ${promptBlock('commentary', 'Сарказм → prompt.md', d.commentary.text,
+              'системный промпт Фазы A для сценария «Сарказм»: саркастичный, неформальный авторский тон и правила переписывания.',
+              sc.active === 'sarcastic')}
+            ${promptBlock('deep', 'Архитектор → prompt_deep.md', d.deep.text,
+              'системный промпт Фазы A для сценария «Архитектор»: холодная техно-философская аналитика, метод «отъезжающей камеры».',
+              sc.active === 'architect')}
+
+            <div class="group-subtitle">Общий для обоих сценариев</div>
+            ${promptBlock('assembly', 'Сборка дайджеста → assembly_prompt.md', d.assembly.text,
+              'системный промпт Фазы B: механическая сборка готовых комментариев в финальный дайджест (нумерация, упоминание курса, граница, хэштеги). Применяется в любом сценарии.',
+              false)}
           </div>`;
       } else if (active === 'help') {
         html = `
@@ -633,12 +663,9 @@
             <p class="card-desc">Что на что влияет.</p>
             <div class="help-block"><h3>Общие</h3><p>Модель Claude задаёт, какая версия модели используется и для генерации комментариев, и для сборки дайджеста.</p></div>
             <div class="help-block"><h3>Очередь и генерация</h3><p>Порог статей — сколько новых статей должно накопиться, чтобы автоматически запустить генерацию. Макс. статей — верхняя граница на один дайджест. Интервал — как часто пайплайн проверяет очередь.</p></div>
-            <div class="help-block"><h3>Стиль комментариев</h3><p>Системный промпт, по которому Claude пишет авторский комментарий к каждой статье.</p></div>
-            <div class="help-block"><h3>Сборка дайджеста</h3><p>Системный промпт для сборки готовых комментариев в финальный пост с нумерацией, упоминанием курса и хэштегами.</p></div>
-            <div class="help-block"><h3>Глубокий промпт</h3><p>Расширенный промпт для углублённой обработки материалов.</p></div>
-            <div class="help-block"><h3>Контент</h3><p>Оформление дайджеста: основной хэштег, текст упоминания курса, граница/дисклеймер и хэштеги в конце поста.</p></div>
+            <div class="help-block"><h3>Сценарии</h3><p>Сценарий задаёт системный промпт Фазы A (авторский комментарий к статье). Взаимоисключающие: «Сарказм» (prompt.md) и «Архитектор» (prompt_deep.md) — активен ровно один. Общий для обоих — «Сборка дайджеста» (assembly_prompt.md, Фаза B): нумерация, упоминание курса, граница и хэштеги. Все три промпта редактируются прямо в этом разделе; кнопка «Сохранить выбор» переключает активный сценарий.</p></div>
+            <div class="help-block"><h3>Контент</h3><p>Оформление дайджеста: основной хэштег, текст упоминания курса, граница/дисклеймер и хэштеги в конце поста (config.md). Применяется в любом сценарии.</p></div>
             <div class="help-block"><h3>Публикация</h3><p>Токены Telegram, Facebook и API-ключи. Управляют тем, куда и от чьего имени публикуются дайджесты.</p></div>
-            <div class="help-block"><h3>Сценарии</h3><p>Переключатель сценария меняет системный промпт Фазы A (генерация авторских комментариев): «Сарказм» использует prompt.md, «Архитектор» — prompt_deep.md. Сборка дайджеста (Фаза B) одинакова для всех сценариев.</p></div>
             <div class="help-note">
               <b>Важно.</b> Секреты (токены, ключи) редактируются только в файле <code>.env</code> на сервере — этот интерфейс их не меняет.
               Параметр <b>Интервал проверки очереди</b> применяется только после рестарта сервера; остальные значения подхватываются сразу после сохранения.
@@ -647,7 +674,7 @@
       }
 
       panel.innerHTML = html;
-      bindSave(active);
+      bindSaves();
       if (active === 'scenarios') bindScenarioCards();
     }
 
@@ -662,10 +689,11 @@
       });
     }
 
-    function bindSave(id) {
-      const btn = document.getElementById('save-' + id);
-      if (!btn) return;
-      btn.onclick = () => save(id, btn);
+    function bindSaves() {
+      document.querySelectorAll('#panel [id^="save-"]').forEach((btn) => {
+        const id = btn.id.slice(5); // strip "save-"
+        btn.onclick = () => save(id, btn);
+      });
     }
 
     function collectPatch(id) {
