@@ -20,22 +20,72 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function callClaudeWithRetry(client, params, attempt = 1) {
+/**
+ * Run a single model call (already vendor-specific) with exponential-backoff
+ * retry on 429. `fn` returns the raw vendor response.
+ */
+async function withRetry(fn, attempt = 1) {
   try {
-    return await client.messages.create(params);
+    return await fn();
   } catch (err) {
     if (err?.status === 429 && attempt < RETRY_ATTEMPTS) {
       const delay = Math.pow(2, attempt) * 1000;
       console.warn(`[digest-generator] Rate limited, retrying in ${delay}ms (attempt ${attempt}/${RETRY_ATTEMPTS})`);
       await sleep(delay);
-      return callClaudeWithRetry(client, params, attempt + 1);
+      return withRetry(fn, attempt + 1);
     }
     throw err;
   }
 }
 
+/**
+ * Vendor-agnostic single-shot model call. Routes to Anthropic (default) or
+ * OpenAI based on config.llmVendor. Returns the response text.
+ *
+ * @param {Object} config App config (llmVendor, claudeModel, *BaseUrl, *ApiKey)
+ * @param {{system:string, user:string, maxTokens:number}} opts
+ * @returns {Promise<string>}
+ */
+async function callModel(config, { system, user, maxTokens }) {
+  const vendor = config.llmVendor || 'anthropic';
+
+  if (vendor === 'openai') {
+    if (!config.openaiApiKey) {
+      throw new Error('OpenAI API key не настроен (.env: OPENAI_API_KEY)');
+    }
+    // Lazy import so the package is never loaded for the anthropic path and a
+    // missing install does not break startup.
+    const OpenAI = (await import('openai')).default;
+    const client = new OpenAI({
+      apiKey: config.openaiApiKey,
+      baseURL: config.openaiBaseUrl || undefined,
+    });
+    const resp = await withRetry(() => client.chat.completions.create({
+      model: config.claudeModel,
+      max_tokens: maxTokens,
+      messages: [
+        { role: 'system', content: system },
+        { role: 'user', content: user },
+      ],
+    }));
+    return resp.choices[0]?.message?.content || '';
+  }
+
+  // Default: Anthropic
+  const client = new Anthropic({
+    apiKey: config.anthropicApiKey,
+    baseURL: config.anthropicBaseUrl || undefined,
+  });
+  const resp = await withRetry(() => client.messages.create({
+    model: config.claudeModel,
+    max_tokens: maxTokens,
+    system,
+    messages: [{ role: 'user', content: user }],
+  }));
+  return resp.content[0]?.text || '';
+}
+
 export async function generateDigest(db, articles, config) {
-  const client = new Anthropic({ apiKey: config.anthropicApiKey });
   const log = [];
 
   log.push(`Starting digest generation for ${articles.length} articles`);
@@ -67,14 +117,11 @@ export async function generateDigest(db, articles, config) {
         ? `${article.title}\n\n${contentTruncated}`
         : contentTruncated;
 
-      const response = await callClaudeWithRetry(client, {
-        model: config.claudeModel,
-        max_tokens: 512,
+      const commentary = await callModel(config, {
         system: commentarySystem,
-        messages: [{ role: 'user', content: userMessage }],
+        user: userMessage,
+        maxTokens: 512,
       });
-
-      const commentary = response.content[0]?.text || '';
       updateArticleCommentary(article.id, commentary);
       article.commentary = commentary;
 
@@ -118,14 +165,11 @@ export async function generateDigest(db, articles, config) {
 
   log.push('Assembling digest...');
 
-  const assemblyResponse = await callClaudeWithRetry(client, {
-    model: config.claudeModel,
-    max_tokens: 16384,
+  let digestContent = await callModel(config, {
     system: config.assemblyPrompt,
-    messages: [{ role: 'user', content: assemblyUserMessage }],
+    user: assemblyUserMessage,
+    maxTokens: 16384,
   });
-
-  let digestContent = assemblyResponse.content[0]?.text || '';
 
   // Post-processing: remove any preamble before "#новости"
   // Claude sometimes adds explanatory text before the actual digest

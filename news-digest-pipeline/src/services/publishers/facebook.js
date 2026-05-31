@@ -1,6 +1,10 @@
 /**
  * Facebook Page publisher.
  * Posts content to a Facebook Page via Graph API.
+ *
+ * Posting is allowed ONLY to a Page, via a Page Access Token
+ * (POST /{pageId}/feed). Posting to a personal profile is deliberately NOT
+ * implemented for policy/legality reasons (risk of shadow ban). Do not add it.
  */
 export async function publishToFacebook(pageAccessToken, pageId, content) {
   if (!pageAccessToken || !pageId) {

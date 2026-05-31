@@ -86,6 +86,14 @@ function buildConfig() {
     anthropicApiKey: process.env.ANTHROPIC_API_KEY || '',
     falKey: process.env.FAL_KEY || '',
     claudeModel: process.env.CLAUDE_MODEL || 'claude-sonnet-4-20250514',
+
+    // LLM vendor selection. claudeModel above is the active model id, shared by
+    // both vendors (it just holds whatever model id the user picked).
+    llmVendor: process.env.LLM_VENDOR || 'anthropic', // 'anthropic' | 'openai'
+    anthropicBaseUrl: process.env.ANTHROPIC_BASE_URL || '',
+    openaiBaseUrl: process.env.OPENAI_BASE_URL || '',
+    openaiApiKey: process.env.OPENAI_API_KEY || '', // secret
+    geminiApiKey: process.env.GEMINI_API_KEY || '', // secret (planned integrations)
     dbPath: process.env.DB_PATH || './data/news-digest.db',
     ntfyTopic: process.env.NTFY_TOPIC || '',
     articleThreshold: parseInt(process.env.ARTICLE_THRESHOLD || '13', 10),
@@ -105,6 +113,12 @@ function buildConfig() {
     telegramPublishChatId: process.env.TELEGRAM_PUBLISH_CHAT_ID || '',
     youtubeAccessToken: process.env.YOUTUBE_ACCESS_TOKEN || '',
     youtubeChannelId: process.env.YOUTUBE_CHANNEL_ID || '',
+
+    // Planned integrations (placeholders for status display only — pipelines
+    // are not implemented yet).
+    instagramAccessToken: process.env.INSTAGRAM_ACCESS_TOKEN || '',
+    instagramAccountId: process.env.INSTAGRAM_ACCOUNT_ID || '',
+    tiktokAccessToken: process.env.TIKTOK_ACCESS_TOKEN || '',
 
     // Telegram webhook
     telegramWebhookSecret: process.env.TELEGRAM_WEBHOOK_SECRET || '',

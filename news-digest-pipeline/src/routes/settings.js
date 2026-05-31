@@ -11,10 +11,33 @@ const MAX_TEXT_BYTES = 100 * 1024; // ~100KB per text field
 // untouched. Secrets are deliberately NOT in this list.
 const ENV_WRITABLE = {
   claudeModel: 'CLAUDE_MODEL',
+  llmVendor: 'LLM_VENDOR',
+  anthropicBaseUrl: 'ANTHROPIC_BASE_URL',
+  openaiBaseUrl: 'OPENAI_BASE_URL',
   articleThreshold: 'ARTICLE_THRESHOLD',
   maxArticlesPerDigest: 'MAX_ARTICLES_PER_DIGEST',
   checkIntervalMs: 'CHECK_INTERVAL_MS',
   activeScenario: 'ACTIVE_SCENARIO',
+};
+
+const LLM_VENDORS = ['anthropic', 'openai'];
+
+// Suggested model ids per vendor. The UI always allows entering a custom id,
+// so this list is not exhaustive.
+const MODEL_CATALOG = {
+  anthropic: [
+    { id: 'claude-opus-4-8', label: 'Claude Opus 4.8' },
+    { id: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6' },
+    { id: 'claude-haiku-4-5-20251001', label: 'Claude Haiku 4.5' },
+    { id: 'claude-sonnet-4-20250514', label: 'Claude Sonnet 4 (legacy, по умолчанию)' },
+  ],
+  openai: [
+    { id: 'gpt-5.2', label: 'GPT-5.2' },
+    { id: 'gpt-5.1', label: 'GPT-5.1' },
+    { id: 'gpt-4.1', label: 'GPT-4.1' },
+    { id: 'gpt-4o', label: 'GPT-4o' },
+    { id: 'o3', label: 'o3' },
+  ],
 };
 
 const SCENARIO_OPTIONS = [
@@ -51,7 +74,21 @@ function maskSecret(value) {
 function buildSettingsPayload() {
   return {
     general: {
+      llmVendor: { value: config.llmVendor, editable: true },
+      model: { value: config.claudeModel, editable: true },
+      // kept for backwards compatibility; UI uses `model`
       claudeModel: { value: config.claudeModel, editable: true },
+      anthropicBaseUrl: {
+        value: config.anthropicBaseUrl,
+        editable: true,
+        placeholder: 'https://api.anthropic.com',
+      },
+      openaiBaseUrl: {
+        value: config.openaiBaseUrl,
+        editable: true,
+        placeholder: 'https://api.openai.com/v1',
+      },
+      modelCatalog: MODEL_CATALOG,
       nodeEnv: { value: config.nodeEnv, editable: false },
       baseUrl: { value: config.baseUrl, editable: false },
       dbPath: { value: config.dbPath, editable: false },
@@ -95,7 +132,30 @@ function buildSettingsPayload() {
         pageAccessToken: maskSecret(config.facebookPageAccessToken),
       },
       anthropicApiKey: maskSecret(config.anthropicApiKey),
+      openaiApiKey: maskSecret(config.openaiApiKey),
       falKey: maskSecret(config.falKey),
+      // Planned integrations — pipelines not implemented yet, status only.
+      // Secrets are not editable via API (only via .env), like all other secrets.
+      planned: {
+        instagram: {
+          accessToken: maskSecret(config.instagramAccessToken),
+          accountId: maskSecret(config.instagramAccountId),
+          status: 'Пайплайн не реализован — нужно добавить',
+        },
+        tiktok: {
+          accessToken: maskSecret(config.tiktokAccessToken),
+          status: 'Пайплайн не реализован — нужно добавить',
+        },
+        youtube: {
+          accessToken: maskSecret(config.youtubeAccessToken),
+          channelId: maskSecret(config.youtubeChannelId),
+          status: 'Community Posts API недоступен — заглушка',
+        },
+        gemini: {
+          apiKey: maskSecret(config.geminiApiKey),
+          status: 'API-ключ для будущих пайплайнов — нужно добавить',
+        },
+      },
     },
   };
 }
@@ -169,8 +229,13 @@ function validatePatch(body) {
   const files = []; // [{ path, contents }]
 
   // --- .env scalar fields ---
-  if (body.claudeModel !== undefined) {
-    const v = body.claudeModel;
+  // Model id: accept both `model` and `claudeModel` as aliases (UI sends the
+  // selected/custom id). Both write to CLAUDE_MODEL.
+  const modelValue = body.model !== undefined ? body.model
+    : body.claudeModel !== undefined ? body.claudeModel
+    : undefined;
+  if (modelValue !== undefined) {
+    const v = modelValue;
     if (typeof v !== 'string' || v.trim().length === 0) {
       errors.push('claudeModel: должна быть непустой строкой');
     } else if (v.length > 200) {
@@ -181,6 +246,44 @@ function validatePatch(body) {
       env[ENV_WRITABLE.claudeModel] = v.trim();
     }
   }
+
+  // LLM vendor selector — strictly anthropic|openai.
+  if (body.llmVendor !== undefined) {
+    const v = body.llmVendor;
+    if (typeof v !== 'string' || !LLM_VENDORS.includes(v)) {
+      errors.push(`llmVendor: должно быть одним из ${LLM_VENDORS.join(', ')}`);
+    } else {
+      env[ENV_WRITABLE.llmVendor] = v;
+    }
+  }
+
+  // Base URLs. Empty string is allowed (resets to vendor default) and is still
+  // written to .env so the user can explicitly clear it. Non-empty must be a
+  // valid http(s) URL.
+  const baseUrlField = (name, envKey) => {
+    if (body[name] === undefined) return;
+    const v = body[name];
+    if (typeof v !== 'string') {
+      errors.push(`${name}: должно быть строкой`);
+      return;
+    }
+    if (v.length > 300) {
+      errors.push(`${name}: слишком длинная строка (макс. 300 символов)`);
+      return;
+    }
+    if (/[\n\r]/.test(v)) {
+      errors.push(`${name}: не должно содержать переносы строк`);
+      return;
+    }
+    if (v.length > 0 && !/^https?:\/\//.test(v)) {
+      errors.push(`${name}: должно начинаться с http:// или https://`);
+      return;
+    }
+    env[envKey] = v;
+  };
+
+  baseUrlField('anthropicBaseUrl', ENV_WRITABLE.anthropicBaseUrl);
+  baseUrlField('openaiBaseUrl', ENV_WRITABLE.openaiBaseUrl);
 
   const intField = (name, min, max) => {
     if (body[name] === undefined) return;

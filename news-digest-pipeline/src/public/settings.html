@@ -159,7 +159,7 @@
       line-height: 1.5;
     }
 
-    input[type="text"], input[type="number"], textarea {
+    input[type="text"], input[type="number"], textarea, select {
       width: 100%;
       padding: 10px 12px;
       border: 1px solid #ddd8d0;
@@ -171,7 +171,8 @@
       outline: none;
       transition: border-color 0.2s, box-shadow 0.2s;
     }
-    input:focus, textarea:focus {
+    select { cursor: pointer; appearance: auto; }
+    input:focus, textarea:focus, select:focus {
       border-color: #7c3aed;
       box-shadow: 0 0 0 2px rgba(124,58,237,0.12);
     }
@@ -227,6 +228,17 @@
       background: rgba(245,158,11,0.08);
       color: #d97706;
       border: 1px solid rgba(245,158,11,0.25);
+    }
+    .badge.planned {
+      background: rgba(120,113,108,0.1);
+      color: #78716c;
+      border: 1px solid rgba(120,113,108,0.28);
+    }
+    .status-note {
+      font-size: 12px;
+      color: #8a8580;
+      margin: -2px 0 12px;
+      line-height: 1.5;
     }
     .group-subtitle {
       font-size: 12px;
@@ -517,6 +529,40 @@
         </div>`;
     }
 
+    function plannedRow(label, masked, statusText) {
+      const on = masked && masked.configured;
+      return `
+        <div class="secret-row">
+          <span class="secret-label">${esc(label)}</span>
+          <span class="secret-meta">
+            <span class="secret-hint">${on ? esc(masked.hint) : '—'}</span>
+            <span class="badge planned">заглушка</span>
+          </span>
+        </div>
+        <div class="status-note">${esc(statusText || '')}</div>`;
+    }
+
+    function plannedSection(planned) {
+      if (!planned) return '';
+      let out = '<div class="group-subtitle">Планируемые интеграции</div>';
+      out += '<div class="status-note">Пайплайны будут добавлены позже. Сейчас отображается только статус и наличие секрета в .env.</div>';
+      if (planned.instagram) {
+        out += plannedRow('Instagram · Access Token', planned.instagram.accessToken, planned.instagram.status);
+        out += plannedRow('Instagram · Account ID', planned.instagram.accountId, '');
+      }
+      if (planned.tiktok) {
+        out += plannedRow('TikTok · Access Token', planned.tiktok.accessToken, planned.tiktok.status);
+      }
+      if (planned.youtube) {
+        out += plannedRow('YouTube · Access Token', planned.youtube.accessToken, planned.youtube.status);
+        out += plannedRow('YouTube · Channel ID', planned.youtube.channelId, '');
+      }
+      if (planned.gemini) {
+        out += plannedRow('Google Gemini · API Key', planned.gemini.apiKey, planned.gemini.status);
+      }
+      return out;
+    }
+
     function renderPanel() {
       const panel = document.getElementById('panel');
       const d = DATA;
@@ -524,14 +570,42 @@
 
       if (active === 'general') {
         const g = d.general;
+        const catalog = g.modelCatalog || { anthropic: [], openai: [] };
+        const vendor = (g.llmVendor && g.llmVendor.value) || 'anthropic';
+        const currentModel = (g.model && g.model.value) || (g.claudeModel && g.claudeModel.value) || '';
+        const vendorOpts = ['anthropic', 'openai'].map((v) =>
+          `<option value="${v}" ${v === vendor ? 'selected' : ''}>${v === 'anthropic' ? 'Anthropic' : 'OpenAI'}</option>`
+        ).join('');
+        const modelList = catalog[vendor] || [];
+        const inList = modelList.some((m) => m.id === currentModel);
+        const modelOpts = modelList.map((m) =>
+          `<option value="${esc(m.id)}" ${m.id === currentModel ? 'selected' : ''}>${esc(m.label)}</option>`
+        ).join('') +
+          `<option value="__custom__" ${!inList ? 'selected' : ''}>Другая (ввести вручную)…</option>`;
+        const customDisplay = inList ? 'none' : 'block';
         html = `
           <div class="card active">
             <h2>Общие</h2>
-            <p class="card-desc">Базовые параметры приложения. Модель Claude используется для генерации комментариев и сборки.</p>
+            <p class="card-desc">Базовые параметры приложения. Вендор и модель используются для генерации комментариев и сборки дайджеста.</p>
             <div class="field">
-              <label>Модель Claude (CLAUDE_MODEL)</label>
-              <input type="text" id="f-claudeModel" value="${esc(g.claudeModel.value)}">
-              <div class="hint">Например: claude-sonnet-4-20250514</div>
+              <label>Вендор (LLM_VENDOR)</label>
+              <select id="f-llmVendor">${vendorOpts}</select>
+            </div>
+            <div class="field">
+              <label>Модель (CLAUDE_MODEL)</label>
+              <select id="f-model">${modelOpts}</select>
+              <input type="text" id="f-modelCustom" style="margin-top:8px;display:${customDisplay}" placeholder="Введите id модели вручную" value="${inList ? '' : esc(currentModel)}">
+              <div class="hint">Список — подсказка, не исчерпывающий. Можно ввести произвольный id через «Другая».</div>
+            </div>
+            <div class="field">
+              <label>Anthropic endpoint (ANTHROPIC_BASE_URL)</label>
+              <input type="text" id="f-anthropicBaseUrl" placeholder="${esc((g.anthropicBaseUrl && g.anthropicBaseUrl.placeholder) || 'https://api.anthropic.com')}" value="${esc((g.anthropicBaseUrl && g.anthropicBaseUrl.value) || '')}">
+              <div class="hint">Оставьте пустым для значения по умолчанию.</div>
+            </div>
+            <div class="field">
+              <label>OpenAI endpoint (OPENAI_BASE_URL)</label>
+              <input type="text" id="f-openaiBaseUrl" placeholder="${esc((g.openaiBaseUrl && g.openaiBaseUrl.placeholder) || 'https://api.openai.com/v1')}" value="${esc((g.openaiBaseUrl && g.openaiBaseUrl.value) || '')}">
+              <div class="hint">Оставьте пустым для значения по умолчанию.</div>
             </div>
             <div class="field">
               <label>Окружение (NODE_ENV)</label>
@@ -545,6 +619,7 @@
               <label>Путь к БД (DB_PATH)</label>
               <input type="text" value="${esc(g.dbPath.value)}" readonly>
             </div>
+            <div class="hint">API-ключи задаются в разделе «Публикация» / в файле .env.</div>
             ${saveBar('general')}
           </div>`;
       } else if (active === 'queue') {
@@ -603,11 +678,14 @@
             ${secretRow('Publish Chat ID', pub.telegram.publishChatId)}
             ${secretRow('Webhook Secret', pub.telegram.webhookSecret)}
             <div class="group-subtitle">Facebook</div>
+            <div class="status-note"><span class="badge on">Только Публичная страница (Page)</span> Легальный путь. Постинг в личный профиль не поддерживается.</div>
             ${secretRow('Page ID', pub.facebook.pageId)}
             ${secretRow('Page Access Token', pub.facebook.pageAccessToken)}
             <div class="group-subtitle">API ключи</div>
             ${secretRow('Anthropic API Key', pub.anthropicApiKey)}
+            ${secretRow('OpenAI API Key', pub.openaiApiKey)}
             ${secretRow('Fal Key', pub.falKey)}
+            ${plannedSection(pub.planned)}
           </div>`;
       } else if (active === 'scenarios') {
         const sc = d.scenarios;
@@ -687,6 +765,33 @@
       panel.innerHTML = html;
       bindSaves();
       if (active === 'scenarios') bindScenarioCards();
+      if (active === 'general') bindGeneralControls();
+    }
+
+    function bindGeneralControls() {
+      const vendorSel = document.getElementById('f-llmVendor');
+      const modelSel = document.getElementById('f-model');
+      const customInp = document.getElementById('f-modelCustom');
+      if (!vendorSel || !modelSel || !customInp) return;
+
+      const catalog = (DATA.general && DATA.general.modelCatalog) || { anthropic: [], openai: [] };
+
+      const refreshCustomVisibility = () => {
+        customInp.style.display = modelSel.value === '__custom__' ? 'block' : 'none';
+      };
+
+      vendorSel.onchange = () => {
+        const list = catalog[vendorSel.value] || [];
+        const opts = list.map((m) => `<option value="${esc(m.id)}">${esc(m.label)}</option>`).join('') +
+          '<option value="__custom__">Другая (ввести вручную)…</option>';
+        modelSel.innerHTML = opts;
+        // Reset selection to first model of the new vendor.
+        modelSel.value = list.length ? list[0].id : '__custom__';
+        customInp.value = '';
+        refreshCustomVisibility();
+      };
+
+      modelSel.onchange = refreshCustomVisibility;
     }
 
     function bindScenarioCards() {
@@ -708,7 +813,17 @@
 
     function collectPatch(id) {
       if (id === 'general') {
-        return { claudeModel: document.getElementById('f-claudeModel').value };
+        const modelSel = document.getElementById('f-model');
+        const customInp = document.getElementById('f-modelCustom');
+        const modelId = modelSel.value === '__custom__'
+          ? (customInp.value || '').trim()
+          : modelSel.value;
+        return {
+          llmVendor: document.getElementById('f-llmVendor').value,
+          claudeModel: modelId,
+          anthropicBaseUrl: document.getElementById('f-anthropicBaseUrl').value.trim(),
+          openaiBaseUrl: document.getElementById('f-openaiBaseUrl').value.trim(),
+        };
       }
       if (id === 'queue') {
         return {
