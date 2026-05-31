@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS digests (
   id TEXT PRIMARY KEY,
   date TEXT,
   part INTEGER DEFAULT 1,
+  seq_number INTEGER,
   articles_count INTEGER DEFAULT 0,
   content TEXT,
   status TEXT DEFAULT 'draft',

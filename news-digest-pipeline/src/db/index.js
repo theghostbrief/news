@@ -27,6 +27,14 @@ export function initDb(dbPath) {
 
   // Token accounting + cost columns on digests (idempotent)
   const digestCols = new Set(db.prepare('PRAGMA table_info(digests)').all().map((c) => c.name));
+  if (!digestCols.has('seq_number')) {
+    // createDigest writes seq_number, so older DBs missing this column break
+    // digest creation entirely. Add it and backfill existing rows in order.
+    db.exec('ALTER TABLE digests ADD COLUMN seq_number INTEGER');
+    const rows = db.prepare('SELECT id FROM digests ORDER BY created_at ASC, rowid ASC').all();
+    const setSeq = db.prepare('UPDATE digests SET seq_number = ? WHERE id = ?');
+    rows.forEach((r, i) => setSeq.run(i + 1, r.id));
+  }
   if (!digestCols.has('model')) {
     db.exec('ALTER TABLE digests ADD COLUMN model TEXT');
   }
