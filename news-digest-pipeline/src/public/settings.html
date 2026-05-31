@@ -631,27 +631,38 @@
               <div class="scenario-desc">${esc(o.description)}</div>
             </button>`;
         }).join('');
+        const isActiveSel = selectedScenario === sc.active;
+        const selOpt = sc.options.find((o) => o.id === selectedScenario) || {};
+        let scenarioPrompt = '';
+        if (selectedScenario === 'sarcastic') {
+          scenarioPrompt = promptBlock('commentary', 'Стиль комментариев → prompt.md', d.commentary.text,
+            'системный промпт Фазы A для сценария «Сарказм»: саркастичный, неформальный авторский тон и правила переписывания.',
+            isActiveSel);
+        } else if (selectedScenario === 'architect') {
+          scenarioPrompt = promptBlock('deep', 'Глубокий промпт → prompt_deep.md', d.deep.text,
+            'системный промпт Фазы A для сценария «Архитектор»: холодная техно-философская аналитика, метод «отъезжающей камеры».',
+            isActiveSel);
+        }
+        const inactiveNote = isActiveSel
+          ? ''
+          : `<div class="help-note">Сценарий «${esc(selOpt.name || selectedScenario)}» выбран, но ещё не активен. Нажмите <b>«Сделать активным»</b>, чтобы пайплайн начал использовать его промпт.</div>`;
         html = `
           <div class="card active">
             <h2>Сценарии</h2>
-            <p class="card-desc">Сценарий определяет системный промпт Фазы A (генерация авторских комментариев к статьям). Сборка дайджеста (Фаза B) общая и от выбора сценария не зависит. Все промпты редактируются здесь же.</p>
+            <p class="card-desc">Выберите сценарий — ниже показываются только его этапы и промпт Фазы A. Сборка дайджеста (Фаза B) общая для всех сценариев.</p>
 
-            <div class="group-subtitle">Активный сценарий</div>
+            <div class="group-subtitle">Выбор сценария</div>
             ${cards}
             <div class="save-bar">
-              <button class="btn btn-primary" id="save-scenarios">Сохранить выбор</button>
+              <button class="btn btn-primary" id="save-scenarios">Сделать активным</button>
               <span class="status" id="status-scenarios"></span>
             </div>
 
-            <div class="group-subtitle">Промпт сценария · взаимоисключающие</div>
-            ${promptBlock('commentary', 'Сарказм → prompt.md', d.commentary.text,
-              'системный промпт Фазы A для сценария «Сарказм»: саркастичный, неформальный авторский тон и правила переписывания.',
-              sc.active === 'sarcastic')}
-            ${promptBlock('deep', 'Архитектор → prompt_deep.md', d.deep.text,
-              'системный промпт Фазы A для сценария «Архитектор»: холодная техно-философская аналитика, метод «отъезжающей камеры».',
-              sc.active === 'architect')}
+            <div class="group-subtitle">Промпт сценария «${esc(selOpt.name || selectedScenario)}»</div>
+            ${inactiveNote}
+            ${scenarioPrompt}
 
-            <div class="group-subtitle">Общий для обоих сценариев</div>
+            <div class="group-subtitle">Общий этап · для всех сценариев</div>
             ${promptBlock('assembly', 'Сборка дайджеста → assembly_prompt.md', d.assembly.text,
               'системный промпт Фазы B: механическая сборка готовых комментариев в финальный дайджест (нумерация, упоминание курса, граница, хэштеги). Применяется в любом сценарии.',
               false)}
@@ -681,10 +692,9 @@
     function bindScenarioCards() {
       document.querySelectorAll('.scenario-card').forEach((el) => {
         el.onclick = () => {
+          if (selectedScenario === el.dataset.scenario) return;
           selectedScenario = el.dataset.scenario;
-          document.querySelectorAll('.scenario-card').forEach((c) => {
-            c.classList.toggle('selected', c.dataset.scenario === selectedScenario);
-          });
+          renderPanel(); // re-render so only the selected scenario's stage/prompt shows
         };
       });
     }
