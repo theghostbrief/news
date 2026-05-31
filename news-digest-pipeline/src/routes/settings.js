@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { readFileSync, writeFileSync, renameSync, existsSync } from 'fs';
 import { randomBytes } from 'crypto';
 import config, { paths, reloadConfig } from '../config.js';
+import { MODEL_CATALOG } from '../data/model-catalog.js';
 
 const router = Router();
 
@@ -22,23 +23,9 @@ const ENV_WRITABLE = {
 
 const LLM_VENDORS = ['anthropic', 'openai'];
 
-// Suggested model ids per vendor. The UI always allows entering a custom id,
-// so this list is not exhaustive.
-const MODEL_CATALOG = {
-  anthropic: [
-    { id: 'claude-opus-4-8', label: 'Claude Opus 4.8' },
-    { id: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6' },
-    { id: 'claude-haiku-4-5-20251001', label: 'Claude Haiku 4.5' },
-    { id: 'claude-sonnet-4-20250514', label: 'Claude Sonnet 4 (legacy, по умолчанию)' },
-  ],
-  openai: [
-    { id: 'gpt-5.2', label: 'GPT-5.2' },
-    { id: 'gpt-5.1', label: 'GPT-5.1' },
-    { id: 'gpt-4.1', label: 'GPT-4.1' },
-    { id: 'gpt-4o', label: 'GPT-4o' },
-    { id: 'o3', label: 'o3' },
-  ],
-};
+// Suggested model ids per vendor come from the shared catalog
+// (src/data/model-catalog.js), which also carries pricing. The UI always
+// allows entering a custom id, so this list is not exhaustive.
 
 const SCENARIO_OPTIONS = [
   {

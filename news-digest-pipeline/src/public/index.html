@@ -338,6 +338,14 @@
       font-variant-numeric: tabular-nums;
     }
 
+    /* Cost */
+    .cost-val {
+      color: #2d2a26;
+      font-variant-numeric: tabular-nums;
+      font-weight: 500;
+      cursor: help;
+    }
+
     /* Modal */
     .modal-overlay {
       display: none;
@@ -450,6 +458,7 @@
           <th>Создан</th>
           <th>Опубликован</th>
           <th>Статей</th>
+          <th>Стоимость</th>
           <th>Статус</th>
           <th>Действия</th>
         </tr>
@@ -497,7 +506,7 @@
       const subtitle = document.getElementById('subtitle');
 
       if (digests.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6" class="empty">Дайджестов пока нет</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" class="empty">Дайджестов пока нет</td></tr>';
         subtitle.textContent = 'Нет дайджестов';
         return;
       }
@@ -546,11 +555,23 @@
           <option value="published" ${status === 'published' ? 'selected' : ''}>Опубликован</option>
         </select>`;
 
+        // Cost cell
+        let costHtml;
+        if (d.cost_usd !== null && d.cost_usd !== undefined) {
+          const inTok = d.input_tokens || 0;
+          const outTok = d.output_tokens || 0;
+          const title = `${d.model || 'модель не указана'} · ${inTok}/${outTok} токенов`;
+          costHtml = `<span class="cost-val" title="${title}">$${Number(d.cost_usd).toFixed(4)}</span>`;
+        } else {
+          costHtml = '<span class="no-pub">—</span>';
+        }
+
         return `<tr>
           <td><span class="row-num">${d.seq_number || (i + 1)}</span></td>
           <td>${createdHtml}</td>
           <td>${pubHtml}</td>
           <td><span class="articles-count">${d.articles_count || 0}</span></td>
+          <td>${costHtml}</td>
           <td>${statusSelect}</td>
           <td>${actionBtn}</td>
         </tr>`;

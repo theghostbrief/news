@@ -11,6 +11,7 @@ import {
   getDigests,
   getDigest,
 } from '../db/index.js';
+import { priceFor } from '../data/model-catalog.js';
 
 const MAX_CONTENT_LENGTH = 3000;
 const RETRY_ATTEMPTS = 3;
@@ -40,11 +41,11 @@ async function withRetry(fn, attempt = 1) {
 
 /**
  * Vendor-agnostic single-shot model call. Routes to Anthropic (default) or
- * OpenAI based on config.llmVendor. Returns the response text.
+ * OpenAI based on config.llmVendor. Returns text plus token usage.
  *
  * @param {Object} config App config (llmVendor, claudeModel, *BaseUrl, *ApiKey)
  * @param {{system:string, user:string, maxTokens:number}} opts
- * @returns {Promise<string>}
+ * @returns {Promise<{text:string, inputTokens:number, outputTokens:number}>}
  */
 async function callModel(config, { system, user, maxTokens }) {
   const vendor = config.llmVendor || 'anthropic';
@@ -68,7 +69,11 @@ async function callModel(config, { system, user, maxTokens }) {
         { role: 'user', content: user },
       ],
     }));
-    return resp.choices[0]?.message?.content || '';
+    return {
+      text: resp.choices[0]?.message?.content || '',
+      inputTokens: resp.usage?.prompt_tokens || 0,
+      outputTokens: resp.usage?.completion_tokens || 0,
+    };
   }
 
   // Default: Anthropic
@@ -82,11 +87,19 @@ async function callModel(config, { system, user, maxTokens }) {
     system,
     messages: [{ role: 'user', content: user }],
   }));
-  return resp.content[0]?.text || '';
+  return {
+    text: resp.content[0]?.text || '',
+    inputTokens: resp.usage?.input_tokens || 0,
+    outputTokens: resp.usage?.output_tokens || 0,
+  };
 }
 
 export async function generateDigest(db, articles, config) {
   const log = [];
+
+  // Token accounting across every successful model call (Phase A + Phase B).
+  let totalInputTokens = 0;
+  let totalOutputTokens = 0;
 
   log.push(`Starting digest generation for ${articles.length} articles`);
 
@@ -117,11 +130,14 @@ export async function generateDigest(db, articles, config) {
         ? `${article.title}\n\n${contentTruncated}`
         : contentTruncated;
 
-      const commentary = await callModel(config, {
+      const res = await callModel(config, {
         system: commentarySystem,
         user: userMessage,
         maxTokens: 512,
       });
+      const commentary = res.text;
+      totalInputTokens += res.inputTokens;
+      totalOutputTokens += res.outputTokens;
       updateArticleCommentary(article.id, commentary);
       article.commentary = commentary;
 
@@ -165,11 +181,14 @@ export async function generateDigest(db, articles, config) {
 
   log.push('Assembling digest...');
 
-  let digestContent = await callModel(config, {
+  const assemblyRes = await callModel(config, {
     system: config.assemblyPrompt,
     user: assemblyUserMessage,
     maxTokens: 16384,
   });
+  let digestContent = assemblyRes.text;
+  totalInputTokens += assemblyRes.inputTokens;
+  totalOutputTokens += assemblyRes.outputTokens;
 
   // Post-processing: remove any preamble before "#новости"
   // Claude sometimes adds explanatory text before the actual digest
@@ -186,10 +205,25 @@ export async function generateDigest(db, articles, config) {
     articlesCount: articlesWithCommentary.length,
   });
 
+  // Compute cost from accumulated token usage and the model's base pricing.
+  const p = priceFor(config.claudeModel);
+  let costUsd = null;
+  if (p) {
+    const raw = (totalInputTokens / 1e6) * p.input + (totalOutputTokens / 1e6) * p.output;
+    costUsd = Math.round(raw * 1e6) / 1e6;
+  }
+
+  const costLabel = costUsd === null ? 'n/a' : `$${costUsd}`;
+  log.push(`Tokens: in=${totalInputTokens} out=${totalOutputTokens} | Model: ${config.claudeModel} | Cost: ${costLabel}`);
+
   updateDigest(digestId, {
     content: digestContent,
     status: 'draft',
     generation_log: log.join('\n'),
+    model: config.claudeModel,
+    input_tokens: totalInputTokens,
+    output_tokens: totalOutputTokens,
+    cost_usd: costUsd,
   });
 
   // Assign articles to digest

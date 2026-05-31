@@ -578,8 +578,11 @@
         ).join('');
         const modelList = catalog[vendor] || [];
         const inList = modelList.some((m) => m.id === currentModel);
+        const priceHint = (m) => m.pricing
+          ? ` — $${m.pricing.input}/$${m.pricing.output} за 1M`
+          : '';
         const modelOpts = modelList.map((m) =>
-          `<option value="${esc(m.id)}" ${m.id === currentModel ? 'selected' : ''}>${esc(m.label)}</option>`
+          `<option value="${esc(m.id)}" ${m.id === currentModel ? 'selected' : ''}>${esc(m.label)}${esc(priceHint(m))}</option>`
         ).join('') +
           `<option value="__custom__" ${!inList ? 'selected' : ''}>Другая (ввести вручную)…</option>`;
         const customDisplay = inList ? 'none' : 'block';
@@ -782,7 +785,8 @@
 
       vendorSel.onchange = () => {
         const list = catalog[vendorSel.value] || [];
-        const opts = list.map((m) => `<option value="${esc(m.id)}">${esc(m.label)}</option>`).join('') +
+        const priceHint = (m) => m.pricing ? ` — $${m.pricing.input}/$${m.pricing.output} за 1M` : '';
+        const opts = list.map((m) => `<option value="${esc(m.id)}">${esc(m.label)}${esc(priceHint(m))}</option>`).join('') +
           '<option value="__custom__">Другая (ввести вручную)…</option>';
         modelSel.innerHTML = opts;
         // Reset selection to first model of the new vendor.

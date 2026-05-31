@@ -25,6 +25,21 @@ export function initDb(dbPath) {
     db.exec('ALTER TABLE articles ADD COLUMN source_message_id TEXT');
   }
 
+  // Token accounting + cost columns on digests (idempotent)
+  const digestCols = new Set(db.prepare('PRAGMA table_info(digests)').all().map((c) => c.name));
+  if (!digestCols.has('model')) {
+    db.exec('ALTER TABLE digests ADD COLUMN model TEXT');
+  }
+  if (!digestCols.has('input_tokens')) {
+    db.exec('ALTER TABLE digests ADD COLUMN input_tokens INTEGER DEFAULT 0');
+  }
+  if (!digestCols.has('output_tokens')) {
+    db.exec('ALTER TABLE digests ADD COLUMN output_tokens INTEGER DEFAULT 0');
+  }
+  if (!digestCols.has('cost_usd')) {
+    db.exec('ALTER TABLE digests ADD COLUMN cost_usd REAL');
+  }
+
   return db;
 }
 
@@ -97,7 +112,8 @@ export function createDigest({ date, part = 1, articlesCount = 0 }) {
 
 export function updateDigest(id, fields) {
   const allowed = ['content', 'status', 'generation_log', 'published_at',
-    'facebook_post_id', 'telegram_message_id', 'youtube_post_id', 'articles_count'];
+    'facebook_post_id', 'telegram_message_id', 'youtube_post_id', 'articles_count',
+    'model', 'input_tokens', 'output_tokens', 'cost_usd'];
   const updates = [];
   const values = [];
 
