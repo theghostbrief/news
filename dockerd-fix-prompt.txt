@@ -1,0 +1,11 @@
+VPS 148.230.84.56 (1 vCPU): dockerd завис, держит CPU ~100% больше суток (отсюда нехватка CPU и steal). Причина — застрявшая горутина от оборванного `docker logs`; клиент уже убит, но демон крутится вхолостую, контейнеры простаивают.
+
+Под root:
+systemctl restart docker
+
+Проверка:
+sleep 5; pidstat -p "$(pgrep -xo dockerd)" 1 3; docker ps
+
+Ожидаемо: dockerd падает со ~100% до ~1-2%; контейнеры (news-digest-pipeline, root-traefik-1, root-n8n-1) поднимутся сами (restart unless-stopped/always).
+
+НЕ делать: не переустанавливать Docker, не удалять контейнеры/образы/volume, не ребутить сервер, не трогать данные. Хватит одного `systemctl restart docker`, простой ~10 сек.

@@ -21,7 +21,6 @@
     "morgan": "^1.10.0",
     "openai": "^4.104.0",
     "patchright": "^1.59.4",
-    "playwright-core": "^1.52.0",
     "sharp": "^0.34.5",
     "uuid": "^11.1.0"
   },

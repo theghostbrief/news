@@ -9,10 +9,16 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const parentDir = join(__dirname, '..');  // news-digest-pipeline root
 const newsRoot = join(parentDir, '..');   // News/ directory with prompt files
 
-// Docker mounts prompts at /app/prompts/; locally they live in the parent News/ dir
+// Prompts are looked up in three places, in order:
+//   1. /app/prompts        — Docker volume mount
+//   2. <pipeline>/prompts  — bare-metal (systemd) deploy ships them here
+//   3. News/ parent dir    — local dev
 const dockerPromptsDir = '/app/prompts';
+const localPromptsDir = join(parentDir, 'prompts');
 const promptsDir = existsSync(join(dockerPromptsDir, 'prompt.md'))
   ? dockerPromptsDir
+  : existsSync(join(localPromptsDir, 'prompt.md'))
+  ? localPromptsDir
   : newsRoot;
 
 // Absolute paths to all editable source files. Exported so the settings API
