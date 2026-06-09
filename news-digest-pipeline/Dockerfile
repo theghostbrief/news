@@ -1,31 +1,15 @@
 FROM node:20-bookworm-slim
 WORKDIR /app
 
-# Install Chromium and dependencies for Playwright
+# Server-side Chromium/Playwright was removed (2026-06): article content is
+# fetched by the local Mac fetcher (real Chrome via AppleScript), never on the
+# server, so the headless browser was ~400MB of dead weight. Keep only:
+#   - wget: used by the docker-compose healthcheck
+#   - ca-certificates: outbound HTTPS to the Anthropic API
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    chromium \
-    chromium-sandbox \
-    fonts-liberation \
-    fonts-noto \
-    fonts-noto-cjk \
-    fonts-freefont-ttf \
-    libnss3 \
-    libatk-bridge2.0-0 \
-    libdrm2 \
-    libxcomposite1 \
-    libxdamage1 \
-    libxrandr2 \
-    libgbm1 \
-    libasound2 \
-    libpango-1.0-0 \
-    libcairo2 \
-    libcups2 \
-    libxkbcommon0 \
     wget \
+    ca-certificates \
     && rm -rf /var/lib/apt/lists/*
-
-ENV PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium
-ENV CHROMIUM_FLAGS="--no-sandbox --disable-dev-shm-usage"
 
 COPY package*.json ./
 RUN npm ci --production
