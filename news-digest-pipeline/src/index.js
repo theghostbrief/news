@@ -5,12 +5,13 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import config from './config.js';
 import { initDb } from './db/index.js';
-import { apiAuth, dashboardAuth } from './middleware/auth.js';
+import { writeAuth } from './middleware/auth.js';
 import healthRouter from './routes/health.js';
 import articlesRouter from './routes/articles.js';
 import digestsRouter from './routes/digests.js';
 import telegramRouter from './routes/telegram.js';
 import settingsRouter from './routes/settings.js';
+import authRouter from './routes/auth.js';
 import { startQueueManager } from './services/queue-manager.js';
 import { setupTelegramBot } from './services/telegram-bot.js';
 
@@ -55,28 +56,26 @@ const generateLimiter = rateLimit({
 // Health endpoint — public, no auth
 app.use('/health', healthRouter);
 
-// Dashboard (Basic Auth + rate limit for brute force protection)
-const dashboardLimiter = rateLimit({
+// Dashboard pages — served publicly. Read-only for anonymous visitors; the
+// frontend enables editing controls only after a successful login. Writes are
+// still enforced server-side by writeAuth below.
+const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 10, // 10 failed attempts per 15 min
-  message: 'Too many login attempts, try again later',
-  skipSuccessfulRequests: true, // only count 401s
+  max: 20, // login attempts per IP per 15 min
+  message: { error: 'Too many login attempts, try again later' },
+  skipSuccessfulRequests: true,
 });
 
-app.use((req, res, next) => {
-  if (req.path.startsWith('/api/') || req.path === '/health') return next();
-  dashboardLimiter(req, res, () => {
-    dashboardAuth(req, res, () => {
-      express.static(join(__dirname, 'public'))(req, res, next);
-    });
-  });
-});
+app.use(express.static(join(__dirname, 'public')));
 
-// Telegram webhook — mounted before general API auth (has its own secret-token check)
+// Auth status/login — public (status is read-only; login triggers Basic Auth)
+app.use('/api/auth', loginLimiter, authRouter);
+
+// Telegram webhook — mounted before write-auth (has its own secret-token check)
 app.use('/api/telegram', telegramRouter);
 
-// API auth + rate limiting for all other /api/* routes
-app.use('/api', apiAuth, apiLimiter);
+// Public reads, authenticated writes for all other /api/* routes
+app.use('/api', writeAuth, apiLimiter);
 
 // API routes with specific rate limits
 app.use('/api/settings', settingsRouter);

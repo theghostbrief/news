@@ -1,11 +1,17 @@
 /**
- * Authentication middleware for API and Dashboard.
+ * Authentication middleware — public reads, authenticated writes.
  *
- * - API routes: Bearer token or query param ?key= (using API_SECRET_KEY)
- * - Dashboard: HTTP Basic Auth (using DASHBOARD_PASSWORD, separate from API key)
- * - Telegram webhook: exempted (has its own secret-token check)
+ * Model:
+ *   - Static pages and all GET/HEAD/OPTIONS API calls are PUBLIC (read-only).
+ *   - Mutating API calls (POST/PATCH/DELETE) require credentials.
+ *   - Telegram webhook is exempt (has its own secret-token check).
  *
- * Two separate keys: compromising one doesn't compromise the other.
+ * Credentials (any one):
+ *   - Bearer token or ?key= using API_SECRET_KEY (used by local-fetcher, API clients)
+ *   - HTTP Basic Auth using DASHBOARD_PASSWORD or API_SECRET_KEY (dashboard login)
+ *
+ * Enforcement is production-only. Locally (NODE_ENV !== 'production') everything
+ * is open (full access) so development has no friction.
  */
 
 import { createHash, timingSafeEqual } from 'crypto';
@@ -27,83 +33,74 @@ function safeCompare(a, b) {
 }
 
 /**
- * Auth is enforced only in production. Locally (NODE_ENV !== 'production')
- * the dashboard and API are open so the login prompt doesn't get in the way.
- * The deployed instance runs with NODE_ENV=production and stays protected.
+ * Auth is enforced only in production. Locally the dashboard and API are fully
+ * open so the login prompt doesn't get in the way. The deployed instance runs
+ * with NODE_ENV=production and enforces the read/write split.
  */
 function authDisabled() {
   return process.env.NODE_ENV !== 'production';
 }
 
-export function apiAuth(req, res, next) {
-  // Telegram webhook has its own auth via X-Telegram-Bot-Api-Secret-Token
-  if (req.path.startsWith('/telegram/') || req.path.startsWith('/api/telegram/')) return next();
-
-  if (authDisabled()) return next();
-
-  const expectedKey = process.env.API_SECRET_KEY;
-  if (!expectedKey) return next(); // dev mode
-
-  // Check Bearer token
+/**
+ * Non-throwing credential check. Returns true if the request carried valid
+ * credentials via Bearer token, ?key=, or Basic Auth (API key or dashboard
+ * password). Does not send any response.
+ */
+function hasValidCreds(req) {
+  const expectedKey = process.env.API_SECRET_KEY || '';
+  const dashPass = process.env.DASHBOARD_PASSWORD || '';
   const authHeader = req.headers.authorization || '';
-  if (authHeader.startsWith('Bearer ')) {
-    const bearer = authHeader.slice(7);
-    if (safeCompare(bearer, expectedKey)) return next();
+
+  if (expectedKey) {
+    if (authHeader.startsWith('Bearer ') && safeCompare(authHeader.slice(7), expectedKey)) return true;
+    if (req.query.key && safeCompare(String(req.query.key), expectedKey)) return true;
   }
 
-  // Check query param
-  if (req.query.key && safeCompare(req.query.key, expectedKey)) return next();
-
-  // Check Basic Auth (dashboard passes Basic Auth to API on same origin)
   if (authHeader.startsWith('Basic ')) {
     try {
       const decoded = Buffer.from(authHeader.split(' ')[1], 'base64').toString();
       const colonIdx = decoded.indexOf(':');
       if (colonIdx !== -1) {
         const pass = decoded.slice(colonIdx + 1);
-        // Accept either API key or dashboard password
-        const dashPass = process.env.DASHBOARD_PASSWORD || '';
-        if (safeCompare(pass, expectedKey) || (dashPass && safeCompare(pass, dashPass))) return next();
+        if (expectedKey && safeCompare(pass, expectedKey)) return true;
+        if (dashPass && safeCompare(pass, dashPass)) return true;
       }
     } catch {
-      // malformed — fall through
+      // malformed — treat as no creds
     }
   }
 
-  return res.status(401).json({ error: 'Unauthorized' });
+  return false;
 }
 
-export function dashboardAuth(req, res, next) {
+/**
+ * Is this caller allowed to perform writes? True in dev (open), or when valid
+ * credentials are present. Used by the /api/auth/status endpoint and by
+ * writeAuth. Never sends a response.
+ */
+export function isAuthenticated(req) {
+  return authDisabled() || hasValidCreds(req);
+}
+
+/**
+ * Whether write-auth is enforced at all. False in dev (everything open), true
+ * in production. The frontend uses this to decide whether to show a login CTA.
+ */
+export function authRequired() {
+  return !authDisabled();
+}
+
+const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
+
+/**
+ * Public reads, authenticated writes. Safe methods (GET/HEAD/OPTIONS) always
+ * pass. Mutating methods require valid credentials, except when auth is
+ * disabled (dev) or for the Telegram webhook (its own secret-token check).
+ */
+export function writeAuth(req, res, next) {
+  if (req.path.startsWith('/telegram/') || req.path.startsWith('/api/telegram/')) return next();
+  if (SAFE_METHODS.has(req.method.toUpperCase())) return next();
   if (authDisabled()) return next();
-
-  const expectedPass = process.env.DASHBOARD_PASSWORD || process.env.API_SECRET_KEY;
-  if (!expectedPass) return next(); // dev mode
-
-  const authHeader = req.headers.authorization || '';
-  if (!authHeader.startsWith('Basic ')) {
-    res.setHeader('WWW-Authenticate', 'Basic realm="News Digest Dashboard"');
-    return res.status(401).send('Authentication required');
-  }
-
-  try {
-    const decoded = Buffer.from(authHeader.split(' ')[1], 'base64').toString();
-    const colonIdx = decoded.indexOf(':');
-    if (colonIdx === -1) {
-      res.setHeader('WWW-Authenticate', 'Basic realm="News Digest Dashboard"');
-      return res.status(401).send('Invalid credentials');
-    }
-    const user = decoded.slice(0, colonIdx);
-    const pass = decoded.slice(colonIdx + 1);
-    const expectedUser = process.env.DASHBOARD_USER || 'admin';
-
-    if (!safeCompare(user, expectedUser) || !safeCompare(pass, expectedPass)) {
-      res.setHeader('WWW-Authenticate', 'Basic realm="News Digest Dashboard"');
-      return res.status(401).send('Invalid credentials');
-    }
-  } catch {
-    res.setHeader('WWW-Authenticate', 'Basic realm="News Digest Dashboard"');
-    return res.status(401).send('Invalid credentials');
-  }
-
-  next();
+  if (hasValidCreds(req)) return next();
+  return res.status(401).json({ error: 'Unauthorized — требуется авторизация для изменений' });
 }
