@@ -4,7 +4,7 @@ import { MODEL_CATALOG, priceFor } from './model-catalog.js';
 describe('MODEL_CATALOG', () => {
   it('has the expected number of models per vendor', () => {
     expect(MODEL_CATALOG.anthropic).toHaveLength(7);
-    expect(MODEL_CATALOG.openai).toHaveLength(8);
+    expect(MODEL_CATALOG.openai).toHaveLength(9);
   });
 
   it('every model has id, label and numeric input/output pricing', () => {
@@ -34,6 +34,10 @@ describe('priceFor', () => {
 
   it('returns base prices for a known OpenAI model', () => {
     expect(priceFor('gpt-5.4-mini')).toEqual({ input: 0.75, output: 4.5 });
+  });
+
+  it('returns base prices for GPT-5.6 Terra', () => {
+    expect(priceFor('gpt-5.6-terra')).toEqual({ input: 2.5, output: 15 });
   });
 
   it('returns null for an unknown model', () => {

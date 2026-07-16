@@ -22,6 +22,7 @@ export const MODEL_CATALOG = {
     { id: 'claude-haiku-4-5-20251001', label: 'Claude Haiku 4.5', pricing: { input: 1, output: 5 } },
   ],
   openai: [
+    { id: 'gpt-5.6-terra', label: 'GPT-5.6 Terra', pricing: { input: 2.5, output: 15 } },
     { id: 'gpt-5.5', label: 'GPT-5.5', pricing: { input: 5, output: 30 } },
     { id: 'gpt-5.5-pro', label: 'GPT-5.5 Pro', pricing: { input: 30, output: 180 } },
     { id: 'gpt-5.4', label: 'GPT-5.4', pricing: { input: 2.5, output: 15 } },

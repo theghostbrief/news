@@ -61,14 +61,39 @@ async function callModel(config, { system, user, maxTokens }) {
       apiKey: config.openaiApiKey,
       baseURL: config.openaiBaseUrl || undefined,
     });
-    const resp = await withRetry(() => client.chat.completions.create({
+    const request = {
       model: config.claudeModel,
-      max_tokens: maxTokens,
       messages: [
         { role: 'system', content: system },
         { role: 'user', content: user },
       ],
-    }));
+    };
+    if (config.openaiReasoningEffort) {
+      request.reasoning_effort = config.openaiReasoningEffort;
+    }
+    let resp;
+    try {
+      resp = await withRetry(() => client.chat.completions.create({
+        ...request,
+        max_completion_tokens: maxTokens,
+      }));
+    } catch (err) {
+      const message = String(err.message || '');
+      if (request.reasoning_effort && message.includes('reasoning_effort')) {
+        delete request.reasoning_effort;
+        resp = await withRetry(() => client.chat.completions.create({
+          ...request,
+          max_completion_tokens: maxTokens,
+        }));
+      } else if (!message.includes('max_completion_tokens')) {
+        throw err;
+      } else {
+        resp = await withRetry(() => client.chat.completions.create({
+          ...request,
+          max_tokens: maxTokens,
+        }));
+      }
+    }
     return {
       text: resp.choices[0]?.message?.content || '',
       inputTokens: resp.usage?.prompt_tokens || 0,

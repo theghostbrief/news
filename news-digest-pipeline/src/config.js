@@ -99,6 +99,7 @@ function buildConfig() {
     anthropicBaseUrl: process.env.ANTHROPIC_BASE_URL || '',
     openaiBaseUrl: process.env.OPENAI_BASE_URL || '',
     openaiApiKey: process.env.OPENAI_API_KEY || '', // secret
+    openaiReasoningEffort: process.env.OPENAI_REASONING_EFFORT || '',
     geminiApiKey: process.env.GEMINI_API_KEY || '', // secret (planned integrations)
     dbPath: process.env.DB_PATH || './data/news-digest.db',
     ntfyTopic: process.env.NTFY_TOPIC || '',
