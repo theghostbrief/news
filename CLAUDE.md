@@ -48,3 +48,10 @@
 - Подключение к удалённому серверу
 - Финальная демонстрация результата
 - Неоднозначные продуктовые решения (не технические)
+
+<!-- BEGIN: PIPELINE_MODEL_SELECTION_HANDOFF -->
+## Pipeline Model Selection Handoff
+
+When work concerns a model-backed pipeline/API route, read [Claude Code Pipeline Model-Selection Handoff](/Users/alexeykrolmini/Code/CLAUDE_CODE_PIPELINE_MODEL_SELECTION_HANDOFF.md) and its required [GPT-5.6 Model Selection Guide](/Users/alexeykrolmini/Code/GPT-5.6-model-selection-guide-ru.md).
+Start with a read-only, microtask-level audit; verify exact provider models, reasoning controls, and pricing from current official documentation; return an evaluation/rollback recommendation before changing any runtime route.
+<!-- END: PIPELINE_MODEL_SELECTION_HANDOFF -->

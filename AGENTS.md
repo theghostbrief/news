@@ -7,6 +7,11 @@ This file defines:
 - `project_priority`
 
 
+## Pipeline Model Selection
+
+- When a pipeline/API model choice arises, consult [GPT-5.6 Model Selection Guide](/Users/alexeykrolmini/Code/GPT-5.6-model-selection-guide-ru.md), map its **Model × Reasoning** recommendation to the provider/model supported by this project, and do not default to mini/nano by habit.
+- For a cross-provider audit or model-refresh recommendation, read [Pipeline Model-Selection Handoff](/Users/alexeykrolmini/Code/CLAUDE_CODE_PIPELINE_MODEL_SELECTION_HANDOFF.md), ground it in live code and current official provider documentation, and return a read-only evaluation plan before changing any runtime route.
+
 ### Делегирование задач субагентам
 
 При получении задачи от пользователя — сначала оценить:
