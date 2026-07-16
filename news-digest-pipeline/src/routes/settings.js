@@ -15,6 +15,7 @@ const ENV_WRITABLE = {
   llmVendor: 'LLM_VENDOR',
   anthropicBaseUrl: 'ANTHROPIC_BASE_URL',
   openaiBaseUrl: 'OPENAI_BASE_URL',
+  openaiReasoningEffort: 'OPENAI_REASONING_EFFORT',
   articleThreshold: 'ARTICLE_THRESHOLD',
   maxArticlesPerDigest: 'MAX_ARTICLES_PER_DIGEST',
   checkIntervalMs: 'CHECK_INTERVAL_MS',
@@ -22,6 +23,14 @@ const ENV_WRITABLE = {
 };
 
 const LLM_VENDORS = ['anthropic', 'openai'];
+
+// Suggested reasoning-effort levels for the OpenAI path. Empty string clears the
+// setting (nothing is sent — current runtime default). The list is a hint, not
+// an exhaustive contract: the generator tolerates an unsupported value by
+// dropping `reasoning_effort` and retrying (see digest-generator.js), so any
+// short token is accepted here rather than hard-validating against a vendor enum
+// that changes between model families.
+const REASONING_EFFORTS = ['minimal', 'low', 'medium', 'high'];
 
 // Suggested model ids per vendor come from the shared catalog
 // (src/data/model-catalog.js), which also carries pricing. The UI always
@@ -75,10 +84,16 @@ function buildSettingsPayload() {
         editable: true,
         placeholder: 'https://api.openai.com/v1',
       },
+      openaiReasoningEffort: {
+        value: config.openaiReasoningEffort,
+        editable: true,
+        suggestions: REASONING_EFFORTS,
+      },
       modelCatalog: MODEL_CATALOG,
       nodeEnv: { value: config.nodeEnv, editable: false },
       baseUrl: { value: config.baseUrl, editable: false },
       dbPath: { value: config.dbPath, editable: false },
+      ntfyTopic: { value: config.ntfyTopic, editable: false },
     },
     queue: {
       articleThreshold: { value: config.articleThreshold, editable: true },
@@ -271,6 +286,23 @@ function validatePatch(body) {
 
   baseUrlField('anthropicBaseUrl', ENV_WRITABLE.anthropicBaseUrl);
   baseUrlField('openaiBaseUrl', ENV_WRITABLE.openaiBaseUrl);
+
+  // OpenAI reasoning effort. Empty string is allowed and written so the user can
+  // explicitly clear it (nothing gets sent at runtime). Non-empty must be a short
+  // lowercase token; we do not hard-validate against a fixed vendor enum because
+  // the generator self-heals unsupported values.
+  if (body.openaiReasoningEffort !== undefined) {
+    const v = body.openaiReasoningEffort;
+    if (typeof v !== 'string') {
+      errors.push('openaiReasoningEffort: должно быть строкой');
+    } else if (v.length > 20) {
+      errors.push('openaiReasoningEffort: слишком длинная строка (макс. 20 символов)');
+    } else if (v.length > 0 && !/^[a-z]+$/i.test(v)) {
+      errors.push('openaiReasoningEffort: только латинские буквы (например minimal, low, medium, high)');
+    } else {
+      env[ENV_WRITABLE.openaiReasoningEffort] = v.trim().toLowerCase();
+    }
+  }
 
   const intField = (name, min, max) => {
     if (body[name] === undefined) return;

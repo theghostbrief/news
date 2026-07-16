@@ -586,19 +586,40 @@
         ).join('') +
           `<option value="__custom__" ${!inList ? 'selected' : ''}>Другая (ввести вручную)…</option>`;
         const customDisplay = inList ? 'none' : 'block';
+
+        // OpenAI reasoning effort — vendor-conditional (only meaningful for OpenAI).
+        const reasoning = (g.openaiReasoningEffort && g.openaiReasoningEffort.value) || '';
+        const reasoningSuggestions = (g.openaiReasoningEffort && g.openaiReasoningEffort.suggestions)
+          || ['minimal', 'low', 'medium', 'high'];
+        const reasoningInList = reasoningSuggestions.includes(reasoning);
+        const reasoningOpts =
+          `<option value="">— не задано (по умолчанию) —</option>` +
+          reasoningSuggestions.map((r) =>
+            `<option value="${esc(r)}" ${r === reasoning ? 'selected' : ''}>${esc(r)}</option>`
+          ).join('') +
+          (reasoning && !reasoningInList
+            ? `<option value="${esc(reasoning)}" selected>${esc(reasoning)} (из .env)</option>`
+            : '');
+        const reasoningDisplay = vendor === 'openai' ? 'block' : 'none';
         html = `
           <div class="card active">
             <h2>Общие</h2>
             <p class="card-desc">Базовые параметры приложения. Вендор и модель используются для генерации комментариев и сборки дайджеста.</p>
             <div class="field">
-              <label>Вендор (LLM_VENDOR)</label>
+              <label>Вендор — провайдер LLM</label>
               <select id="f-llmVendor">${vendorOpts}</select>
+              <div class="hint">Хранится в LLM_VENDOR. Определяет, к какому API идут запросы: Anthropic или OpenAI.</div>
             </div>
             <div class="field">
-              <label>Модель (CLAUDE_MODEL)</label>
+              <label>Модель</label>
               <select id="f-model">${modelOpts}</select>
               <input type="text" id="f-modelCustom" style="margin-top:8px;display:${customDisplay}" placeholder="Введите id модели вручную" value="${inList ? '' : esc(currentModel)}">
-              <div class="hint">Список — подсказка, не исчерпывающий. Можно ввести произвольный id через «Другая».</div>
+              <div class="hint">Список — подсказка, не исчерпывающий. Можно ввести произвольный id через «Другая». Применяется к выбранному вендору; хранится в CLAUDE_MODEL (историческое имя переменной).</div>
+            </div>
+            <div class="field" id="field-reasoning" style="display:${reasoningDisplay}">
+              <label>Reasoning effort — только OpenAI</label>
+              <select id="f-openaiReasoningEffort">${reasoningOpts}</select>
+              <div class="hint">Глубина размышления модели (OPENAI_REASONING_EFFORT). «Не задано» = как сейчас, параметр не отправляется. Список — подсказка; OpenAI рекомендует начинать с medium и повышать только при нехватке качества.</div>
             </div>
             <div class="field">
               <label>Anthropic endpoint (ANTHROPIC_BASE_URL)</label>
@@ -621,6 +642,11 @@
             <div class="field">
               <label>Путь к БД (DB_PATH)</label>
               <input type="text" value="${esc(g.dbPath.value)}" readonly>
+            </div>
+            <div class="field">
+              <label>Тема уведомлений (NTFY_TOPIC)</label>
+              <input type="text" value="${esc((g.ntfyTopic && g.ntfyTopic.value) || '')}" readonly>
+              <div class="hint">Канал ntfy для служебных уведомлений. Меняется только в .env.</div>
             </div>
             <div class="hint">API-ключи задаются в разделе «Публикация» / в файле .env.</div>
             ${saveBar('general')}
@@ -793,6 +819,9 @@
         modelSel.value = list.length ? list[0].id : '__custom__';
         customInp.value = '';
         refreshCustomVisibility();
+        // Reasoning effort is OpenAI-only — show/hide with the vendor.
+        const reasoningField = document.getElementById('field-reasoning');
+        if (reasoningField) reasoningField.style.display = vendorSel.value === 'openai' ? 'block' : 'none';
       };
 
       modelSel.onchange = refreshCustomVisibility;
@@ -822,11 +851,13 @@
         const modelId = modelSel.value === '__custom__'
           ? (customInp.value || '').trim()
           : modelSel.value;
+        const reasoningSel = document.getElementById('f-openaiReasoningEffort');
         return {
           llmVendor: document.getElementById('f-llmVendor').value,
           claudeModel: modelId,
           anthropicBaseUrl: document.getElementById('f-anthropicBaseUrl').value.trim(),
           openaiBaseUrl: document.getElementById('f-openaiBaseUrl').value.trim(),
+          openaiReasoningEffort: reasoningSel ? reasoningSel.value : '',
         };
       }
       if (id === 'queue') {
