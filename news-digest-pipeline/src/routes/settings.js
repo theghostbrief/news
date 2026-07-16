@@ -3,6 +3,7 @@ import { readFileSync, writeFileSync, renameSync, existsSync } from 'fs';
 import { randomBytes } from 'crypto';
 import config, { paths, reloadConfig } from '../config.js';
 import { MODEL_CATALOG } from '../data/model-catalog.js';
+import { isAuthenticated } from '../middleware/auth.js';
 
 const router = Router();
 
@@ -353,10 +354,35 @@ function validatePatch(body) {
   return { errors, env, files };
 }
 
-// GET /api/settings — full grouped settings, secrets masked
+/**
+ * Strip the sensitive prompt/config text for unauthenticated viewers. The
+ * prompts are the product's IP: anonymous visitors may browse the settings
+ * structure, but must not be able to read or copy the actual prompt/config
+ * bodies. Redacting server-side makes copying impossible (not just hidden in
+ * the UI) — the text never reaches the client.
+ */
+function redactForAnon(payload) {
+  payload.locked = true;
+  const lock = (obj) => { if (obj && typeof obj === 'object') { obj.text = ''; obj.locked = true; obj.editable = false; } };
+  lock(payload.commentary);
+  lock(payload.assembly);
+  lock(payload.deep);
+  if (payload.content) {
+    payload.content.text = '';
+    payload.content.locked = true;
+    payload.content.editable = false;
+    payload.content.parsed = {};
+  }
+  return payload;
+}
+
+// GET /api/settings — full grouped settings, secrets masked. Prompt/config
+// bodies are redacted for unauthenticated callers.
 router.get('/', (req, res) => {
   try {
-    res.json(buildSettingsPayload());
+    const payload = buildSettingsPayload();
+    if (!isAuthenticated(req)) redactForAnon(payload);
+    res.json(payload);
   } catch (err) {
     console.error('[settings] GET error:', err.message);
     res.status(500).json({ error: 'Failed to read settings' });

@@ -429,6 +429,23 @@
     .auth-bar .btn-login:hover { box-shadow: 0 0 16px rgba(124,58,237,0.3); transform: translateY(-1px); }
     /* Read-only: hide all Save / activate controls for anonymous visitors */
     body.readonly .save-bar { display: none !important; }
+    /* Anonymous: scenarios are not switchable, and technical content is not
+       selectable/copyable (prompts/config are also redacted server-side). */
+    body.readonly .scenario-card { pointer-events: none; cursor: default; opacity: 0.9; }
+    body.readonly .panel { user-select: none; -webkit-user-select: none; }
+    .lock-notice {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 18px 16px;
+      background: #f7f5f2;
+      border: 1px dashed #ddd8d0;
+      border-radius: 10px;
+      color: #8a8580;
+      font-size: 13.5px;
+      line-height: 1.5;
+      user-select: none;
+    }
 
     /* Scrollbar */
     ::-webkit-scrollbar { width: 8px; }
@@ -537,16 +554,23 @@
         </div>`;
     }
 
+    function lockNotice() {
+      return '<div class="lock-notice">🔒 Содержимое доступно только после входа. Войдите, чтобы просмотреть и редактировать.</div>';
+    }
+
     function promptBlock(id, title, value, purpose, usedNow) {
       const used = usedNow ? '<span class="badge on">используется сейчас</span>' : '';
       const purposeHtml = purpose
         ? `<div class="purpose"><b>Назначение:</b> ${esc(purpose)}</div>`
         : '';
+      const body = READONLY
+        ? lockNotice()
+        : `<textarea class="mono" id="ta-${id}">${esc(value)}</textarea>`;
       return `
         <div class="prompt-block">
           <div class="prompt-head"><span class="prompt-title">${esc(title)}</span>${used}</div>
           ${purposeHtml}
-          <textarea class="mono" id="ta-${id}">${esc(value)}</textarea>
+          ${body}
           ${saveBar(id)}
         </div>`;
     }
@@ -713,10 +737,9 @@
       } else if (active === 'content') {
         const c = d.content;
         const p = c.parsed || {};
-        html = `
-          <div class="card active">
-            <h2>Контент</h2>
-            <p class="card-desc">Настройки оформления дайджеста: хэштеги, упоминание курса, граница/дисклеймер (config.md).</p>
+        const contentBody = READONLY
+          ? lockNotice()
+          : `
             <div class="field">
               <textarea class="mono" id="ta-content">${esc(c.text)}</textarea>
             </div>
@@ -726,7 +749,12 @@
               <div class="pv"><b>Упоминание курса:</b> ${esc(p.courseMention)}</div>
               <div class="pv"><b>Граница/дисклеймер:</b> ${esc(p.boundaryIntent)}</div>
               <div class="pv"><b>Хэштеги в конце:</b> ${esc(p.hashtagsSuffix)}</div>
-            </div>
+            </div>`;
+        html = `
+          <div class="card active">
+            <h2>Контент</h2>
+            <p class="card-desc">Настройки оформления дайджеста: хэштеги, упоминание курса, граница/дисклеймер (config.md).</p>
+            ${contentBody}
             ${saveBar('content')}
           </div>`;
       } else if (active === 'publishing') {
@@ -871,6 +899,7 @@
     }
 
     function bindScenarioCards() {
+      if (READONLY) return; // anonymous visitors cannot switch the active scenario
       document.querySelectorAll('.scenario-card').forEach((el) => {
         el.onclick = () => {
           if (selectedScenario === el.dataset.scenario) return;
