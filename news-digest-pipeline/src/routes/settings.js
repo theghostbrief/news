@@ -182,9 +182,12 @@ function updateEnvFile(updates) {
   const keys = Object.keys(updates);
   if (keys.length === 0) return;
 
+  // Persist dashboard edits to the overrides file on the mounted ./data volume,
+  // NOT the base .env (which is read-only on the server and rebuilt with the
+  // image). See paths.settingsEnv in config.js.
   let raw = '';
-  if (existsSync(paths.env)) {
-    raw = readFileSync(paths.env, 'utf-8');
+  if (existsSync(paths.settingsEnv)) {
+    raw = readFileSync(paths.settingsEnv, 'utf-8');
   }
 
   // Preserve original EOL convention.
@@ -215,7 +218,15 @@ function updateEnvFile(updates) {
     out.push(`${key}=${updates[key]}`);
   }
 
-  atomicWrite(paths.env, out.join('\n') + '\n');
+  // Header for a freshly created overrides file (self-documenting).
+  if (raw.length === 0) {
+    out.unshift(
+      '# Dashboard-editable settings (overrides base .env). Managed by the',
+      '# settings API — do not hand-edit while the server is running.',
+    );
+  }
+
+  atomicWrite(paths.settingsEnv, out.join('\n') + '\n');
 }
 
 function isInt(v) {

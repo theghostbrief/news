@@ -1,4 +1,5 @@
 import { insertArticle, getArticleCount } from '../db/index.js';
+import { validateArticleUrl } from './url-validator.js';
 
 const URL_REGEX = /https?:\/\/[^\s<>"')\]]+/g;
 
@@ -128,16 +129,13 @@ async function handleUrls(botToken, chatId, messageId, text, config) {
   // Deduplicate URLs within the same message
   const uniqueUrls = [...new Set(urls)];
 
-  // Filter: only allow perplexity.ai HTTPS URLs (SSRF protection)
-  const ALLOWED_HOSTS = ['perplexity.ai', 'www.perplexity.ai'];
-  const validUrls = uniqueUrls.filter((u) => {
-    try {
-      const parsed = new URL(u);
-      return parsed.protocol === 'https:' && ALLOWED_HOSTS.includes(parsed.hostname);
-    } catch {
-      return false;
-    }
-  });
+  // Filter + normalize via the shared article-URL contract (HTTPS +
+  // perplexity.ai + no control chars). Store only the normalized href.
+  const validUrls = [];
+  for (const u of uniqueUrls) {
+    const v = validateArticleUrl(u);
+    if (v.ok) validUrls.push(v.href);
+  }
 
   const rejected = uniqueUrls.length - validUrls.length;
   if (validUrls.length === 0) {

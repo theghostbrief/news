@@ -36,6 +36,10 @@ CREATE TABLE IF NOT EXISTS digests (
   updated_at TEXT DEFAULT (datetime('now'))
 );
 
+-- NOTE: source_posts (the FB-Syndication contract table) is intentionally NOT
+-- defined here. It belongs to the optional pro cluster, which creates it
+-- idempotently at startup (src/pro/db/source-posts.js migrateSourcePosts()).
+
 CREATE INDEX IF NOT EXISTS idx_articles_status ON articles(status);
 CREATE INDEX IF NOT EXISTS idx_articles_url ON articles(url);
 CREATE INDEX IF NOT EXISTS idx_articles_digest_id ON articles(digest_id);

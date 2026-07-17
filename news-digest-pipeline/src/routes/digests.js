@@ -9,6 +9,7 @@ import { generateDigest } from '../services/digest-generator.js';
 import { publishDigest } from '../services/publishers/index.js';
 import { getDb } from '../db/index.js';
 import config from '../config.js';
+import { showFull, publicDigest, publicArticle, clampLimit } from './public-dto.js';
 
 const router = Router();
 
@@ -42,15 +43,19 @@ router.post('/generate', async (req, res) => {
   }
 });
 
-// GET /api/digests — list digests
+// GET /api/digests — list digests. The owner sees full rows (unbounded, as the
+// dashboard expects); anonymous callers get a capped, redacted list.
 router.get('/', (req, res) => {
   try {
     const { status } = req.query;
     const filters = {};
     if (status) filters.status = status;
 
-    const digests = getDigests(filters);
-    res.json(digests);
+    if (showFull(req)) {
+      return res.json(getDigests(filters));
+    }
+    filters.limit = clampLimit(req.query.limit, 100, 100);
+    res.json(getDigests(filters).map(publicDigest));
   } catch (err) {
     console.error('[digests] GET / error:', err);
     res.status(500).json({ error: err.message });
@@ -60,7 +65,7 @@ router.get('/', (req, res) => {
 // GET /api/digests/latest/text — latest digest as plain text
 router.get('/latest/text', (req, res) => {
   try {
-    const digests = getDigests();
+    const digests = getDigests({ limit: 1 });
     if (digests.length === 0) {
       return res.status(404).send('No digests yet');
     }
@@ -85,7 +90,10 @@ router.get('/:id', (req, res) => {
 
     const articles = getArticlesByDigestId(digest.id);
 
-    res.json({ ...digest, articles });
+    if (showFull(req)) {
+      return res.json({ ...digest, articles });
+    }
+    res.json({ ...publicDigest(digest), articles: articles.map(publicArticle) });
   } catch (err) {
     console.error('[digests] GET /:id error:', err);
     res.status(500).json({ error: err.message });

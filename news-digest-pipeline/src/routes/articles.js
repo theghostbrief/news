@@ -6,6 +6,8 @@ import {
   getDb,
 } from '../db/index.js';
 import { fetchArticleContent } from '../services/article-fetcher.js';
+import { showFull, publicArticle, clampLimit } from './public-dto.js';
+import { validateArticleUrl } from '../services/url-validator.js';
 
 const router = Router();
 
@@ -14,25 +16,13 @@ router.post('/', async (req, res) => {
   try {
     const { url } = req.body;
 
-    if (!url || typeof url !== 'string') {
-      return res.status(400).json({ error: 'url is required' });
+    // Single-source URL validation (HTTPS + perplexity.ai + no control chars);
+    // store only the normalized href.
+    const v = validateArticleUrl(url);
+    if (!v.ok) {
+      return res.status(400).json({ error: v.error });
     }
-
-    let parsedUrl;
-    try {
-      parsedUrl = new URL(url);
-    } catch {
-      return res.status(400).json({ error: 'Invalid URL' });
-    }
-
-    // SSRF protection: only allow known sources over HTTPS
-    if (parsedUrl.protocol !== 'https:') {
-      return res.status(400).json({ error: 'Only HTTPS URLs are accepted' });
-    }
-    const allowedHosts = ['perplexity.ai', 'www.perplexity.ai'];
-    if (!allowedHosts.includes(parsedUrl.hostname)) {
-      return res.status(400).json({ error: 'Only perplexity.ai URLs are accepted' });
-    }
+    const href = v.href;
 
     const { title: providedTitle, content: providedContent } = req.body;
     let title = providedTitle || '';
@@ -41,11 +31,11 @@ router.post('/', async (req, res) => {
     // If content was provided by client (e.g. iOS Shortcut), skip server-side fetch
     if (!content) {
       try {
-        const fetched = await fetchArticleContent(url);
+        const fetched = await fetchArticleContent(href);
         title = fetched.title;
         content = fetched.content;
       } catch (fetchErr) {
-        const result = insertArticle({ url, title, content: '', source: 'api' });
+        const result = insertArticle({ url: href, title, content: '', source: 'api' });
         if (!result.duplicate) {
           getDb().prepare(
             `UPDATE articles SET fetch_error = ?, updated_at = datetime('now') WHERE id = ?`
@@ -58,7 +48,7 @@ router.post('/', async (req, res) => {
       }
     }
 
-    const result = insertArticle({ url, title, content, source: 'api' });
+    const result = insertArticle({ url: href, title, content, source: 'api' });
 
     res.status(result.duplicate ? 200 : 201).json({
       id: result.id,
@@ -93,8 +83,17 @@ router.post('/batch', (req, res) => {
         continue;
       }
 
+      // Same URL contract as the single-article path — batch was previously
+      // unvalidated, letting untrusted/malformed URLs into the DB (and later
+      // into the fetcher's AppleScript sink).
+      const v = validateArticleUrl(item.url);
+      if (!v.ok) {
+        skipped++;
+        continue;
+      }
+
       const result = insertArticle({
-        url: item.url,
+        url: v.href,
         title: item.title || '',
         content: item.content || '',
         source: item.source || 'extension',
@@ -129,7 +128,7 @@ router.post('/batch', (req, res) => {
 router.get('/', (req, res) => {
   try {
     const { status, limit } = req.query;
-    const limitNum = parseInt(limit || '50', 10);
+    const limitNum = clampLimit(limit, 50, 200);
     const db = getDb();
 
     let articles;
@@ -143,7 +142,7 @@ router.get('/', (req, res) => {
       ).all(limitNum);
     }
 
-    res.json(articles);
+    res.json(showFull(req) ? articles : articles.map(publicArticle));
   } catch (err) {
     console.error('[articles] GET / error:', err);
     res.status(500).json({ error: err.message });

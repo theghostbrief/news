@@ -172,3 +172,7 @@ export function getArticlesByDigestId(digestId) {
 export function deleteArticle(id) {
   return db.prepare('DELETE FROM articles WHERE id = ?').run(id);
 }
+
+// source_posts data access moved to the pro cluster (src/pro/db/source-posts.js).
+// Core owns only the shared connection (getDb) and the core tables. The pro
+// build creates + queries source_posts via the handle returned by getDb().

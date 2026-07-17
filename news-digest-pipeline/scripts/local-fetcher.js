@@ -7,7 +7,14 @@
  * extracts content via AppleScript, sends back to server.
  *
  * No special Chrome flags needed — uses AppleScript to interact with
- * the real Chrome browser, which bypasses Perplexity's bot detection.
+ * the real Chrome browser, which bypasses Perplexity's bot detection
+ * (Cloudflare challenge; a headless browser does NOT pass it, the real
+ * warmed profile does).
+ *
+ * Non-intrusive: all navigation happens in a DEDICATED background Chrome
+ * window addressed by id, and Chrome is never `activate`d. The user's own
+ * window and tabs are never touched and focus is never stolen. If Chrome is
+ * not running it is launched in the background (`open -g`).
  *
  * Usage:
  *   node scripts/local-fetcher.js
@@ -23,6 +30,7 @@ import { load as cheerioLoad } from 'cheerio';
 import { config as loadDotenv } from 'dotenv';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import { validateArticleUrl } from '../src/services/url-validator.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 loadDotenv({ path: join(__dirname, '..', '.env') });
@@ -138,52 +146,59 @@ function isChromeRunning() {
 }
 
 /**
- * Open a URL in a new Chrome tab and return the tab index and window id.
+ * Create a dedicated background Chrome window for fetching and return its id.
+ * No `activate` — the app is not brought to the foreground, and the user's
+ * existing windows/tabs are left completely alone. Returns null on failure.
  */
-function openUrlInChrome(url) {
+function openFetchWindow() {
   const script = `
 tell application "Google Chrome"
-  activate
-  if (count of windows) = 0 then
-    make new window
-  end if
-  tell window 1
-    make new tab with properties {URL:"${url}"}
-  end tell
+  set newWin to make new window
+  return id of newWin
 end tell`;
   return runAppleScriptMulti(script);
 }
 
 /**
- * Get the page source of the active tab in Chrome.
+ * Point the fetch window's single tab at a URL (reused across articles).
  */
-function getActiveTabSource() {
+function navigateFetchTab(winId, url) {
   const script = `
 tell application "Google Chrome"
-  tell active tab of window 1
-    set pageSource to execute javascript "document.documentElement.outerHTML"
-    return pageSource
-  end tell
+  set URL of active tab of window id ${winId} to "${url}"
 end tell`;
   return runAppleScriptMulti(script);
 }
 
 /**
- * Get the URL of the active tab.
+ * Read the current URL of the fetch window's tab.
  */
-function getActiveTabUrl() {
-  return runAppleScript('tell application "Google Chrome" to get URL of active tab of front window');
+function getFetchTabUrl(winId) {
+  const script = `
+tell application "Google Chrome"
+  return URL of active tab of window id ${winId}
+end tell`;
+  return runAppleScriptMulti(script);
 }
 
 /**
- * Close the active tab in Chrome.
+ * Read the full DOM of the fetch window's tab.
  */
-function closeActiveTab() {
+function getFetchTabSource(winId) {
   const script = `
 tell application "Google Chrome"
-  tell active tab of window 1
-    close
-  end tell
+  return execute (active tab of window id ${winId}) javascript "document.documentElement.outerHTML"
+end tell`;
+  return runAppleScriptMulti(script);
+}
+
+/**
+ * Close the dedicated fetch window when the run is done.
+ */
+function closeFetchWindow(winId) {
+  const script = `
+tell application "Google Chrome"
+  close window id ${winId}
 end tell`;
   runAppleScriptMulti(script);
 }
@@ -253,70 +268,87 @@ async function main() {
 
   log(`Found ${articles.length} article(s) without content.`);
 
-  // Check Chrome is running
+  // Check Chrome is running — launch in the BACKGROUND (-g) so it never
+  // steals focus from whatever the user is doing.
   if (!isChromeRunning()) {
-    log('Google Chrome is not running. Starting it...');
-    execSync('open -a "Google Chrome"');
+    log('Google Chrome is not running. Starting it in the background...');
+    execSync('open -g -a "Google Chrome"');
     await sleep(3000);
+  }
+
+  // One dedicated background window for the whole run, addressed by id. The
+  // user's own window/tabs are never touched.
+  const fetchWin = openFetchWindow();
+  if (!fetchWin) {
+    log('Could not open a dedicated Chrome window (is "Allow JavaScript from Apple Events" enabled?). Aborting.');
+    process.exit(1);
   }
 
   let enriched = 0;
   let failed = 0;
 
-  for (const article of articles) {
-    log(`Processing: ${article.url}`);
+  try {
+    for (const article of articles) {
+      log(`Processing: ${article.url}`);
 
-    try {
-      // Open URL in a new tab
-      openUrlInChrome(article.url);
+      try {
+        // Validate against the shared contract (HTTPS + perplexity.ai + no
+        // control chars) before the URL reaches the AppleScript string — the
+        // interpolation sink where a crafted URL would be command injection.
+        const v = validateArticleUrl(article.url);
+        if (!v.ok) {
+          log(`  Skipping untrusted URL (${v.error}): ${article.url}`);
+          failed++;
+          continue;
+        }
 
-      // Wait for page to load
-      await sleep(LOAD_WAIT_MS);
+        // Point the dedicated window's tab at this article (reused per article).
+        navigateFetchTab(fetchWin, v.href);
 
-      // Verify we're on the right page
-      const currentUrl = getActiveTabUrl();
-      if (!currentUrl) {
-        log(`  Could not get active tab URL, skipping.`);
+        // Wait for page to load
+        await sleep(LOAD_WAIT_MS);
+
+        // Verify the tab navigated
+        const currentUrl = getFetchTabUrl(fetchWin);
+        if (!currentUrl) {
+          log(`  Could not read fetch tab URL, skipping.`);
+          failed++;
+          continue;
+        }
+
+        // Get page source
+        const html = getFetchTabSource(fetchWin);
+        if (!html || html.length < 200) {
+          log(`  Got empty or too short page source (${html?.length || 0} chars), skipping.`);
+          failed++;
+          continue;
+        }
+
+        // Extract content
+        const { title, content } = extractFromHtml(html);
+
+        if (!content || content.length < 100) {
+          log(`  Content too short (${content?.length || 0} chars), skipping.`);
+          failed++;
+          continue;
+        }
+
+        // Send back to server
+        await sendContentToServer(article.id, title, content);
+        log(`  Sent to server: "${title}" (${content.length} chars)`);
+        enriched++;
+
+        // Small pause between articles
+        await sleep(BETWEEN_TABS_MS);
+
+      } catch (err) {
+        log(`  Error: ${err.message}`);
         failed++;
-        continue;
       }
-
-      // Get page source
-      const html = getActiveTabSource();
-      if (!html || html.length < 200) {
-        log(`  Got empty or too short page source (${html?.length || 0} chars), skipping.`);
-        closeActiveTab();
-        failed++;
-        continue;
-      }
-
-      // Extract content
-      const { title, content } = extractFromHtml(html);
-
-      if (!content || content.length < 100) {
-        log(`  Content too short (${content?.length || 0} chars), skipping.`);
-        closeActiveTab();
-        failed++;
-        continue;
-      }
-
-      // Send back to server
-      await sendContentToServer(article.id, title, content);
-      log(`  Sent to server: "${title}" (${content.length} chars)`);
-      enriched++;
-
-      // Close the tab
-      closeActiveTab();
-
-      // Small pause between tabs
-      await sleep(BETWEEN_TABS_MS);
-
-    } catch (err) {
-      log(`  Error: ${err.message}`);
-      // Try to close tab on error
-      try { closeActiveTab(); } catch {}
-      failed++;
     }
+  } finally {
+    // Always tidy up the dedicated window.
+    closeFetchWindow(fetchWin);
   }
 
   log(`Done. Enriched: ${enriched}, Failed: ${failed}, Total: ${articles.length}`);

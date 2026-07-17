@@ -19,7 +19,7 @@
       font-size: 15px;
     }
 
-    .container { max-width: 1060px; margin: 0 auto; }
+    .container { max-width: 1200px; margin: 0 auto; }
 
     /* Header */
     .header {
@@ -111,8 +111,18 @@
       font-size: 14px;
       line-height: 1.5;
     }
-    body.readonly .auth-bar { display: flex; }
-    .auth-bar .btn-login {
+    body.readonly .auth-bar, body.authed .auth-bar { display: flex; }
+    /* Authorized state: green bar, hide the read-only notice + login CTA */
+    .auth-ok, .auth-bar .btn-logout { display: none; }
+    body.authed .auth-bar {
+      background: rgba(16,185,129,0.10);
+      border-color: rgba(16,185,129,0.30);
+      color: #047857;
+    }
+    body.authed .auth-ro, body.authed .btn-login { display: none; }
+    body.authed .auth-ok { display: inline; }
+    body.authed .auth-bar .btn-logout { display: inline-block; }
+    .auth-bar .btn-login, .auth-bar .btn-logout {
       margin-left: auto;
       background: linear-gradient(135deg, #7c3aed, #3b82f6);
       color: #fff; border: none; border-radius: 8px;
@@ -121,7 +131,8 @@
       transition: all 0.2s ease; text-decoration: none;
       white-space: nowrap; flex-shrink: 0;
     }
-    .auth-bar .btn-login:hover { box-shadow: 0 0 16px rgba(124,58,237,0.3); transform: translateY(-1px); }
+    .auth-bar .btn-logout { background: linear-gradient(135deg, #64748b, #475569); }
+    .auth-bar .btn-login:hover, .auth-bar .btn-logout:hover { box-shadow: 0 0 16px rgba(124,58,237,0.3); transform: translateY(-1px); }
     /* Hide write-controls for anonymous (read-only) visitors */
     body.readonly .btn-publish,
     body.readonly .plat-btn:not(.sent),
@@ -465,6 +476,32 @@
     ::-webkit-scrollbar-track { background: #f5f3ef; }
     ::-webkit-scrollbar-thumb { background: #ddd8d0; border-radius: 4px; }
     ::-webkit-scrollbar-thumb:hover { background: #b0aaa4; }
+
+    /* Tab bar (shared across Дайджесты / Публикация / Настройки) */
+    .tabs {
+      display: flex;
+      gap: 2px;
+      margin: 4px 0 22px;
+      border-bottom: 1px solid #e8e4df;
+      flex-wrap: wrap;
+    }
+    .tabs .tab {
+      padding: 9px 18px;
+      font-size: 15px;
+      font-weight: 500;
+      color: #8a8580;
+      text-decoration: none;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -1px;
+      transition: color .2s ease, border-color .2s ease;
+      white-space: nowrap;
+    }
+    .tabs .tab:hover { color: #2d2a26; }
+    .tabs .tab.active {
+      color: #7c3aed;
+      border-bottom-color: #7c3aed;
+      font-weight: 600;
+    }
   </style>
 </head>
 <body>
@@ -472,19 +509,25 @@
     <div class="header">
       <h1>News Digest Dashboard</h1>
       <div class="header-right">
-        <a class="btn-settings" href="settings.html">&#9881; Настройки</a>
-        <span class="version-badge">v2.1.0 &middot; 16.07.2026</span>
+        <span class="version-badge">v2.2.0 &middot; 17.07.2026</span>
       </div>
     </div>
     <p class="subtitle" id="subtitle">Загрузка...</p>
+    <nav class="tabs">
+      <a class="tab active" href="index.html">Дайджесты</a>
+      <a class="tab" href="syndication.html">Публикация</a>
+      <a class="tab" href="settings.html">Настройки</a>
+    </nav>
     <div class="course-banner">
       Проект реализован в рамках учебного курса: <strong>Создание ИИ Агентов и приложений для бизнеса, роста, дохода и кайфа.</strong>
       Хотите научиться делать такое же? Попробуйте этот курс. 14 дней пробный период:
       <a href="https://alexeykrol.com/ai_full/" target="_blank" rel="noopener">alexeykrol.com/ai_full/</a>
     </div>
     <div class="auth-bar" id="authbar">
-      <span>👁 Режим просмотра — вы не авторизованы. Можно смотреть, но не менять.</span>
+      <span class="auth-ro">👁 Режим просмотра — вы не авторизованы. Можно смотреть, но не менять.</span>
+      <span class="auth-ok">✅ Вы авторизованы — изменения доступны.</span>
       <a class="btn-login" href="#" id="btn-login">Войти</a>
+      <a class="btn-logout" href="#" id="btn-logout">Выйти</a>
     </div>
     <table>
       <thead>
@@ -717,20 +760,41 @@
     // Auth: public read-only by default; editing controls appear after login.
     let READONLY = false;
     async function loadAuth() {
+      let required = false, authed = false;
       try {
         const res = await fetch('/api/auth/status');
         const a = await res.json();
+        required = !!a.required;
+        authed = !!a.authenticated;
         READONLY = !!(a.required && !a.authenticated);
       } catch (err) {
         READONLY = false; // fail open for viewing; server still guards writes
       }
       document.body.classList.toggle('readonly', READONLY);
+      document.body.classList.toggle('authed', required && authed);
     }
 
     document.getElementById('btn-login').addEventListener('click', (e) => {
       e.preventDefault();
       window.location.href = '/api/auth/login?next=' + encodeURIComponent(location.pathname);
     });
+    document.getElementById('btn-logout').addEventListener('click', (e) => {
+      e.preventDefault();
+      window.location.href = '/api/auth/logout?next=' + encodeURIComponent(location.pathname);
+    });
+
+    // Hide the "Публикация" tab when the syndication feature isn't mounted
+    // (open-core / public build). Pure feature discovery — independent of auth.
+    fetch('/api/features')
+      .then((r) => (r.ok ? r.json() : { features: [] }))
+      .then((d) => {
+        const on = d && Array.isArray(d.features) && d.features.includes('syndication');
+        if (!on) {
+          const tab = document.querySelector('.tabs a.tab[href="syndication.html"]');
+          if (tab) tab.style.display = 'none';
+        }
+      })
+      .catch(() => {});
 
     loadAuth().finally(() => {
       loadDigests();

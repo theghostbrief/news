@@ -46,8 +46,7 @@
 | 2 | Создать **Telegram-бота** через @BotFather и настроить webhook | [telegram-setup.md](news-digest-pipeline/docs/telegram-setup.md) |
 | 3 | Получить **Claude API ключ** на [console.anthropic.com](https://console.anthropic.com/) | — |
 | 4 | *(опционально)* Создать **Facebook App** и получить Page Access Token | [facebook-page-setup.md](news-digest-pipeline/docs/facebook-page-setup.md) |
-| 5 | *(опционально)* Настроить **Facebook Profile** автопубликацию (Patchright) | [facebook-setup.md](news-digest-pipeline/docs/facebook-setup.md) |
-| 6 | Заполнить `.env` файл и запустить `docker compose up -d` | [Быстрый старт](#быстрый-старт) |
+| 5 | Заполнить `.env` файл и запустить `docker compose up -d` | [Быстрый старт](#быстрый-старт) |
 
 ---
 
@@ -80,7 +79,6 @@ graph TB
 
     subgraph "🖥️ Mac"
         L[local-fetcher.js] -->|Chrome| D
-        M[fb-publish.js] -->|Patchright| N[Facebook Profile]
     end
 
     style A fill:#0088cc,color:#fff
@@ -111,9 +109,11 @@ cp .env.example .env
 
 ```env
 # Обязательные
+NODE_ENV=production                 # На сервере обязательно (иначе авторизация отключится)
 ANTHROPIC_API_KEY=sk-ant-...        # Claude API ключ
 TELEGRAM_BOT_TOKEN=123456:ABC...    # Токен от @BotFather
-TELEGRAM_CHAT_ID=123456789         # Ваш Telegram user ID
+TELEGRAM_CHAT_ID=123456789          # Ваш Telegram user ID
+TELEGRAM_WEBHOOK_SECRET=...          # Обязателен для приёма новостей из Telegram
 
 # Опционально (для публикации)
 TELEGRAM_PUBLISH_CHAT_ID=-100...   # ID канала для публикации
@@ -127,12 +127,20 @@ DASHBOARD_PASSWORD=...             # Отдельный пароль для да
 
 ### 3. Запуск
 
+Для локальной разработки — `npm run dev` (авторизация отключена, `NODE_ENV=development`):
+
 ```bash
 npm install
-npm start
+npm run dev
 ```
 
-Дашборд: `http://localhost:3000` (логин: `admin` / ваш `DASHBOARD_PASSWORD`)
+Дашборд: `http://localhost:3000` (локально всё открыто — редактирование без логина).
+
+В production запускайте с `NODE_ENV=production` — авторизация включена, гости видят дашборд только на чтение, редактирование после логина (`admin` / ваш `DASHBOARD_PASSWORD`):
+
+```bash
+NODE_ENV=production npm start
+```
 
 ### 4. Production (Docker)
 
@@ -188,42 +196,30 @@ flowchart LR
 | ✕ **Удалить** | Удалить дайджест |
 | **Статус** | Черновик / Опубликован (с датой) |
 
-Защищён HTTP Basic Auth + rate limiting.
+Дашборд публичен на чтение (гости видят только безопасные поля, без внутренних метрик и идентификаторов); редактирование, генерация и публикация доступны после логина. Записи защищены server-side: проверка кред на каждую мутацию + rate limiting.
 
 ---
 
-## Facebook Profile (Browser Automation)
+## Facebook: только Page, не личный профиль
 
-> **⚠️ ВНИМАНИЕ: ВЫСОКИЙ РИСК БАНА АККАУНТА**
+> **⚠️ Почему автопубликация в личный профиль УДАЛЕНА из проекта**
 >
-> Автоматическая публикация в **личный профиль** Facebook через browser automation (Patchright, Playwright, Puppeteer, Selenium) **может привести к silent ban вашего аккаунта**. Facebook детектирует автоматизацию и без предупреждения начинает удалять все ваши посты — даже те, которые вы публикуете вручную. При этом Account Quality остаётся чистым, никакого уведомления о нарушении нет.
+> Автоматическая публикация в **личный профиль** Facebook через browser automation (Patchright, Playwright, Puppeteer, Selenium) **приводит к silent ban аккаунта**. Facebook детектирует автоматизацию и без предупреждения начинает удалять все ваши посты — даже те, которые вы публикуете вручную. При этом Account Quality остаётся чистым, никакого уведомления о нарушении нет.
 >
 > **Что мы обнаружили на собственном опыте:**
-> - Тестовые посты через Patchright (особенно с текстом вроде «test», «automation») вызвали срабатывание спам-фильтра
+> - Тестовые посты через browser automation (особенно с текстом вроде «test», «automation») вызвали срабатывание спам-фильтра
 > - Фильтр распространился на ВСЕ публикации с аккаунта — включая ручные
 > - Ограничение затронуло даже второй аккаунт с того же IP
 > - Восстановление заняло 3-7 дней полного молчания
 >
-> **Рекомендации:**
-> - Публикация на **Facebook Page через API** — безопасна (Graph API, другой механизм модерации)
-> - Публикация в **Telegram** — безопасна (Bot API)
-> - Публикация в **личный профиль** — только вручную (копировать текст с дашборда)
-> - **Никогда** не публикуйте тестовые посты с вашего основного аккаунта
-> - **Никогда** не делайте rapid publish/delete циклы — это главный триггер
->
-> Полное исследование проблемы: [facebook-shadow-ban-research.md](news-digest-pipeline/docs/facebook-shadow-ban-research.md)
+> **Именно поэтому автопубликация в личный профиль удалена из проекта.** Поддерживается только **Facebook Page через Graph API** — другой, безопасный механизм модерации.
 
-Код для browser automation сохранён в проекте как **экспериментальный** — используйте на свой страх и риск, только с тестовыми аккаунтами:
+**Как публиковать безопасно:**
+- **Facebook Page через API** — поддерживается в проекте (Graph API, безопасно)
+- **Telegram** — поддерживается (Bot API, безопасно)
+- **Личный профиль** — только вручную: скопируйте текст с дашборда (📋) и опубликуйте сами
 
-```bash
-# Первый раз — залогиниться
-node scripts/fb-publish.js --login
-
-# Публикация (⚠️ РИСК БАНА — только тестовые аккаунты!)
-node scripts/fb-publish.js latest
-```
-
-Подробнее: [docs/facebook-setup.md](news-digest-pipeline/docs/facebook-setup.md) — детальное описание борьбы с Facebook bot detection.
+Полное исследование проблемы: [facebook-shadow-ban-research.md](news-digest-pipeline/docs/facebook-shadow-ban-research.md)
 
 ---
 
@@ -269,33 +265,44 @@ flowchart LR
 
 ## API
 
-Все endpoints (кроме `/health`) требуют аутентификации: `Authorization: Bearer <API_SECRET_KEY>`
+**Модель доступа:**
+
+- **Чтение (`GET`) — публичное.** Анонимным вызовам публичные `GET` отдают только безопасные поля (внутренние — стоимость, токены, id внешних постов, логи генерации, telegram-идентификаторы — скрыты). Аутентифицированный владелец (сессия дашборда **или** `Authorization: Bearer <API_SECRET_KEY>`) видит полные данные.
+- **Записи (`POST` / `PATCH` / `DELETE`)** требуют `Authorization: Bearer <API_SECRET_KEY>` или сессию дашборда.
 
 | Метод | Endpoint | Описание |
 |-------|----------|----------|
 | `GET` | `/health` | Статус сервера (публичный) |
-| `GET` | `/` | Dashboard (Basic Auth) |
+| `GET` | `/` | Dashboard — публичный, только чтение для гостей, редактирование после логина |
 | `POST` | `/api/articles` | Добавить статью по URL |
 | `POST` | `/api/articles/batch` | Пакетная загрузка |
+| `GET` | `/api/articles` | Список статей (публичный, безопасные поля) |
 | `GET` | `/api/articles/stats` | Статистика |
 | `POST` | `/api/digests/generate` | Ручная генерация |
-| `GET` | `/api/digests` | Список дайджестов |
+| `GET` | `/api/digests` | Список дайджестов (публичный, безопасные поля) |
 | `GET` | `/api/digests/:id/text` | Чистый текст |
 | `POST` | `/api/digests/:id/publish` | Публикация `{platforms: ["telegram","facebook"]}` |
 | `DELETE` | `/api/digests/:id` | Удалить дайджест |
+| `GET` | `/api/source-posts` | Список source-постов (публичный, безопасные поля) |
+| `POST` | `/api/source-posts/fetch-url` | Добавить FB-пост по ссылке (browserless) |
 
 ---
 
 ## Безопасность
 
-- API и Dashboard защищены аутентификацией (Bearer / Basic Auth)
-- Раздельные ключи для API и Dashboard
-- Rate limiting: 30 req/min (API), 10 attempts/15min (Dashboard)
-- SSRF-защита: whitelist только `perplexity.ai`
-- Timing-safe сравнение ключей
-- `.env` не в git, права `0600`
+- **Модель доступа:** публичное чтение (только безопасные поля) + аутентифицированные записи (Bearer-токен или сессия дашборда).
+- **Fail-closed авторизация:** на сервере обязателен `NODE_ENV=production`. Авторизация отключается ТОЛЬКО при явном `NODE_ENV=development` или `test` (для локальной разработки без трения). Любое другое значение, опечатка или пустое — авторизация ВКЛючена (защита от «тихого» открытия API при мисконфиге).
+- **Только Bearer-токен для API** — query-параметр `?key=` убран (он утекал в логи Traefik/morgan).
+- **Rate limiting:** 30 req/min (API), 10 неудачных попыток записи / 15 мин на IP (до проверки кред — защита от перебора), 20 попыток логина / 15 мин, 60 req/min (Telegram webhook).
+- **Security-заголовки на всех ответах:** `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, `Cross-Origin-Opener-Policy: same-origin`, `Strict-Transport-Security` (в production). Заголовок `X-Powered-By` отключён.
+- **Единая валидация URL статей** (HTTPS + whitelist `perplexity.ai` + запрет управляющих символов, хранится нормализованный href) на всех входах (API, batch, Telegram) и в `local-fetcher.js` — закрывает инъекцию в AppleScript.
+- **SSRF-защита:** whitelist только `perplexity.ai`.
+- **Telegram webhook fail-closed:** требует `TELEGRAM_WEBHOOK_SECRET`; без секрета webhook отвергает все запросы (403).
+- **Timing-safe** сравнение ключей.
+- **Сессия дашборда:** HMAC-подписанная HttpOnly session cookie.
+- `.env` не в git, права `0600`.
 
-Полный аудит: [SECURITY_AUDIT_2026-04-13.md](SECURITY_AUDIT_2026-04-13.md)
+Полный аудит: [CODE_AUDIT_2026-07-16.md](CODE_AUDIT_2026-07-16.md) ・ [SECURITY_AUDIT_2026-04-13.md](SECURITY_AUDIT_2026-04-13.md)
 
 ---
 
@@ -311,16 +318,15 @@ flowchart LR
 │   │   ├── index.js              # Express + auth + rate limiting
 │   │   ├── middleware/auth.js    # Bearer + Basic Auth
 │   │   ├── db/                   # SQLite (better-sqlite3)
-│   │   ├── routes/               # API endpoints
-│   │   ├── services/             # Claude API, publishers, queue
+│   │   ├── routes/               # API endpoints (+ public-dto.js — безопасные поля)
+│   │   ├── services/             # Claude API, publishers, queue (+ url-validator.js)
 │   │   └── public/index.html    # Dashboard
 │   ├── scripts/
-│   │   ├── fb-publish.js         # Facebook Profile (Patchright)
 │   │   ├── local-fetcher.js      # Chrome content extraction
-│   │   └── monitor.sh           # VPS monitoring
+│   │   ├── monitor.sh            # VPS monitoring
+│   │   └── setup-cron.sh         # Cron setup
 │   ├── production/
 │   │   └── image/                # Instagram image pipeline
-│   ├── distribution/             # Platform-specific publishers
 │   ├── docs/                     # Setup guides
 │   ├── Dockerfile
 │   └── docker-compose.yml
@@ -336,11 +342,9 @@ flowchart LR
 |------|------|
 | Telegram (бот + канал) | [telegram-setup.md](news-digest-pipeline/docs/telegram-setup.md) |
 | Facebook Page (Graph API) | [facebook-page-setup.md](news-digest-pipeline/docs/facebook-page-setup.md) |
-| Facebook Profile (Patchright) | [facebook-setup.md](news-digest-pipeline/docs/facebook-setup.md) |
 | VPS + Docker + Traefik | [vps-setup.md](news-digest-pipeline/docs/vps-setup.md) |
 | iOS Shortcut | [ios-shortcut-setup.md](news-digest-pipeline/docs/ios-shortcut-setup.md) |
 | Instagram Pipeline | [instagram/README.md](news-digest-pipeline/instagram/README.md) |
-| Video Pipeline | [distribution/video/README.md](news-digest-pipeline/distribution/video/README.md) |
 
 ---
 
@@ -352,7 +356,7 @@ flowchart LR
 | AI | Claude API (Opus 4), Anthropic SDK |
 | Images | fal.ai, Recraft V3, Sharp |
 | Video | Kling 3.0, Veo 3.1, FFmpeg |
-| Browser | Patchright (stealth Playwright) |
+| Извлечение контента | Реальный Chrome через AppleScript (local-fetcher) + browserless fetch (FB) |
 | Deploy | Docker, Traefik, Ubuntu 24.04 |
 | Notifications | Ntfy.sh |
 

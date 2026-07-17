@@ -5,9 +5,15 @@ import config from '../config.js';
 const router = Router();
 
 router.post('/webhook', (req, res) => {
-  // Verify the secret token from Telegram header
+  // Fail CLOSED: without a configured secret we cannot authenticate Telegram, so
+  // reject rather than accept forged updates that could trigger paid generation.
+  // (Previously the check was skipped when the secret was absent — fail-open.)
+  if (!config.telegramWebhookSecret) {
+    console.warn('[telegram] TELEGRAM_WEBHOOK_SECRET not set — rejecting webhook (fail-closed)');
+    return res.sendStatus(403);
+  }
   const secretToken = req.headers['x-telegram-bot-api-secret-token'];
-  if (config.telegramWebhookSecret && secretToken !== config.telegramWebhookSecret) {
+  if (secretToken !== config.telegramWebhookSecret) {
     console.warn('[telegram] Invalid secret token in webhook request');
     return res.sendStatus(403);
   }

@@ -29,8 +29,22 @@ export const paths = {
   assemblyPrompt: join(promptsDir, 'assembly_prompt.md'),
   deepPrompt: join(promptsDir, 'prompt_deep.md'),
   configMd: join(promptsDir, 'config.md'),
+  // Base .env — secrets + defaults. Loaded via docker-compose env_file at
+  // startup; NOT written by the dashboard.
   env: join(parentDir, '.env'),
+  // Dashboard-editable settings are persisted here as env-style overrides. It
+  // lives inside the mounted ./data volume, so — unlike the base .env, which
+  // sits in the image's ephemeral layer on the server — it survives image
+  // rebuilds and is on a read-write mount where atomic writes succeed.
+  settingsEnv: join(parentDir, 'data', 'settings.env'),
 };
+
+// Apply persisted dashboard overrides on top of the base environment. `override`
+// so a saved value wins over the base .env default; loaded again in
+// reloadConfig() so a save applies live without a restart.
+if (existsSync(paths.settingsEnv)) {
+  dotenvConfig({ path: paths.settingsEnv, override: true });
+}
 
 function readFileOrWarn(filePath, label) {
   try {
@@ -131,6 +145,9 @@ function buildConfig() {
     telegramWebhookSecret: process.env.TELEGRAM_WEBHOOK_SECRET || '',
     baseUrl: process.env.BASE_URL || '',
 
+    // FB Watcher — profile scanned by the read-only poller (Module 1).
+    fbProfileUrl: process.env.FB_PROFILE_URL || 'https://www.facebook.com/alex.v.krol',
+
     // Raw config.md text (kept for the settings editor)
     configMdRaw,
 
@@ -159,6 +176,9 @@ const appConfig = buildConfig();
  */
 export function reloadConfig() {
   dotenvConfig({ path: paths.env, override: true });
+  if (existsSync(paths.settingsEnv)) {
+    dotenvConfig({ path: paths.settingsEnv, override: true });
+  }
   const fresh = buildConfig();
 
   // Drop properties that no longer exist, then copy fresh values in place.
