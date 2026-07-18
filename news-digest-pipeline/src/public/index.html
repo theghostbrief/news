@@ -517,6 +517,7 @@
       <a class="tab active" href="index.html">Дайджесты</a>
       <a class="tab" href="syndication.html">Публикация</a>
       <a class="tab" href="settings.html">Настройки</a>
+      <a class="tab" href="moderation.html">Модерация</a>
     </nav>
     <div class="course-banner">
       Проект реализован в рамках учебного курса: <strong>Создание ИИ Агентов и приложений для бизнеса, роста, дохода и кайфа.</strong>
@@ -788,10 +789,14 @@
     fetch('/api/features')
       .then((r) => (r.ok ? r.json() : { features: [] }))
       .then((d) => {
-        const on = d && Array.isArray(d.features) && d.features.includes('syndication');
-        if (!on) {
+        const feats = (d && Array.isArray(d.features)) ? d.features : [];
+        if (!feats.includes('syndication')) {
           const tab = document.querySelector('.tabs a.tab[href="syndication.html"]');
           if (tab) tab.style.display = 'none';
+        }
+        if (!feats.includes('moderation')) {
+          const modTab = document.querySelector('.tabs a.tab[href="moderation.html"]');
+          if (modTab) modTab.style.display = 'none';
         }
       })
       .catch(() => {});

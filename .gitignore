@@ -9,6 +9,8 @@ CLAUDE.local.md
 .env
 .env.local
 .env.production
+.env.bak*
+.env.*.bak
 Thumbs.db
 node_modules/
 __pycache__/

@@ -4,7 +4,7 @@ import { MODEL_CATALOG, priceFor } from './model-catalog.js';
 describe('MODEL_CATALOG', () => {
   it('has the expected number of models per vendor', () => {
     expect(MODEL_CATALOG.anthropic).toHaveLength(7);
-    expect(MODEL_CATALOG.openai).toHaveLength(9);
+    expect(MODEL_CATALOG.openai).toHaveLength(11);
   });
 
   it('every model has id, label and numeric input/output pricing', () => {

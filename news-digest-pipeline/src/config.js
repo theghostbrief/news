@@ -141,6 +141,23 @@ function buildConfig() {
     instagramAccountId: process.env.INSTAGRAM_ACCOUNT_ID || '',
     tiktokAccessToken: process.env.TIKTOK_ACCESS_TOKEN || '',
 
+    // Comment moderation (pro cluster). These keys are core/shared: harmless in
+    // the public build (no pro folder → the poller never starts), same pattern
+    // as the youtube/instagram placeholders above. See docs/moderation-pipeline.md §9.
+    moderationMode: process.env.MODERATION_MODE || 'shadow', // shadow | live
+    // Judge model/vendor. Empty by default → the judge falls back to the digest's
+    // own claudeModel/llmVendor, so moderation uses the owner's configured model
+    // out of the box (no separate model introduced). Set these only to A/B-swap
+    // the judge independently of the digest.
+    moderationModel: process.env.MODERATION_MODEL || '',
+    moderationVendor: process.env.MODERATION_VENDOR || '',
+    // Prompt-improver (strong, offline). Empty → callers fall back to claudeModel.
+    moderationImproverModel: process.env.MODERATION_IMPROVER_MODEL || '',
+    moderationBanThreshold: parseFloat(process.env.MODERATION_BAN_THRESHOLD || '0.85'),
+    moderationHardDelete: (process.env.MODERATION_HARD_DELETE || 'false') === 'true',
+    moderationPollPostLookback: parseInt(process.env.MODERATION_POLL_POST_LOOKBACK || '5', 10),
+    moderationPollIntervalMs: parseInt(process.env.MODERATION_POLL_INTERVAL_MS || '300000', 10),
+
     // Telegram webhook
     telegramWebhookSecret: process.env.TELEGRAM_WEBHOOK_SECRET || '',
     baseUrl: process.env.BASE_URL || '',

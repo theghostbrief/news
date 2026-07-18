@@ -516,6 +516,7 @@
       <a class="tab" href="index.html">Дайджесты</a>
       <a class="tab" href="syndication.html">Публикация</a>
       <a class="tab active" href="settings.html">Настройки</a>
+      <a class="tab" href="moderation.html">Модерация</a>
     </nav>
 
     <div class="auth-bar" id="authbar">
@@ -1062,6 +1063,10 @@
         if (!PRO_FEATURES.includes('syndication')) {
           const tab = document.querySelector('.tabs a.tab[href="syndication.html"]');
           if (tab) tab.style.display = 'none';
+        }
+        if (!PRO_FEATURES.includes('moderation')) {
+          const modTab = document.querySelector('.tabs a.tab[href="moderation.html"]');
+          if (modTab) modTab.style.display = 'none';
         }
       })
       .catch(() => { PRO_FEATURES = []; });
