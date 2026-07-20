@@ -18,7 +18,9 @@ export async function loadPro() {
     return mod.default;
   } catch (e) {
     const isMissingModule = e && e.code === 'ERR_MODULE_NOT_FOUND';
-    const ref = String((e && (e.message || e.url)) || '');
+    // e.url is a file:// URL (always forward slashes); e.message on Windows
+    // uses backslashes. Normalize so the check works on every platform.
+    const ref = String((e && (e.url || e.message)) || '').replace(/\\/g, '/');
     // Only the top-level pro entrypoint being absent means "public build".
     // A missing module *nested under* pro is a real error — rethrow it.
     const isProEntrypointMissing =
