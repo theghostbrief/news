@@ -29,14 +29,26 @@ export async function generateDigest(db, articles, config) {
 
   log.push(`Starting digest generation for ${articles.length} articles`);
 
-  // Select Phase A system prompt by active scenario. Assembly (Phase B) is
-  // scenario-independent and always uses config.assemblyPrompt.
+  // Select Phase A system prompt by active scenario. 'ghost' is the English
+  // edition and also switches Phase B (assembly prompt + wrapper + completion
+  // marker, all handled below) — 'sarcastic'/'architect' share Krol's
+  // Russian assembly path exactly as before.
   const scenario = config.activeScenario || 'sarcastic';
-  let commentarySystem = scenario === 'architect' ? config.deepPrompt : config.commentaryPrompt;
-  if (scenario === 'architect' && (!config.deepPrompt || !config.deepPrompt.trim())) {
-    commentarySystem = config.commentaryPrompt;
-    log.push('Scenario: architect requested but deepPrompt is empty — falling back to commentaryPrompt');
+  const isGhost = scenario === 'ghost';
+  let commentarySystem;
+  if (isGhost) {
+    commentarySystem = config.ghostCommentaryPrompt;
+    log.push(`Scenario: ${scenario}`);
+  } else if (scenario === 'architect') {
+    if (config.deepPrompt && config.deepPrompt.trim()) {
+      commentarySystem = config.deepPrompt;
+      log.push(`Scenario: ${scenario}`);
+    } else {
+      commentarySystem = config.commentaryPrompt;
+      log.push('Scenario: architect requested but deepPrompt is empty — falling back to commentaryPrompt');
+    }
   } else {
+    commentarySystem = config.commentaryPrompt;
     log.push(`Scenario: ${scenario}`);
   }
 
@@ -87,28 +99,46 @@ export async function generateDigest(db, articles, config) {
   // Phase B: Assembly
   const today = new Date().toISOString().slice(0, 10);
 
-  // Build the user message for assembly
+  // Build the user message for assembly. 'ghost' uses an English wrapper with
+  // per-item ids (needed for the <!--SEG article_id=...--> markers) and the
+  // footer/hashtags from prompts/en/config.md; other scenarios keep Krol's
+  // exact Russian wrapper and config.md fields, unchanged.
   const commentaryList = articlesWithCommentary
-    .map((a, i) => `${i + 1}. ${a.commentary}\n${a.url}`)
+    .map((a, i) => isGhost
+      ? `${i + 1}. [id: ${a.id}]\n${a.commentary}\n${a.url}`
+      : `${i + 1}. ${a.commentary}\n${a.url}`)
     .join('\n\n');
 
-  const assemblyUserMessage = [
-    `Вот ${articlesWithCommentary.length} обработанных комментариев для сборки в дайджест:`,
-    '',
-    commentaryList,
-    '',
-    '---',
-    `Упоминание курса (вставить в середине списка): ${config.courseMention}`,
-    '',
-    `Граница/дисклеймер (в конце): ${config.boundaryIntent}`,
-    '',
-    `Хэштеги (в самом конце): ${config.hashtagsSuffix}`,
-  ].join('\n');
+  const assemblySystem = isGhost ? config.ghostAssemblyPrompt : config.assemblyPrompt;
+
+  const assemblyUserMessage = isGhost
+    ? [
+        `Here are ${articlesWithCommentary.length} processed commentary items to assemble into a digest:`,
+        '',
+        commentaryList,
+        '',
+        '---',
+        `Footer (insert verbatim at the very end): ${config.ghostFooter}`,
+        '',
+        `Hashtags (insert verbatim at the very end, after the footer): ${config.ghostHashtags}`,
+      ].join('\n')
+    : [
+        `Вот ${articlesWithCommentary.length} обработанных комментариев для сборки в дайджест:`,
+        '',
+        commentaryList,
+        '',
+        '---',
+        `Упоминание курса (вставить в середине списка): ${config.courseMention}`,
+        '',
+        `Граница/дисклеймер (в конце): ${config.boundaryIntent}`,
+        '',
+        `Хэштеги (в самом конце): ${config.hashtagsSuffix}`,
+      ].join('\n');
 
   log.push('Assembling digest...');
 
   const assemblyRes = await callModel(config, {
-    system: config.assemblyPrompt,
+    system: assemblySystem,
     user: assemblyUserMessage,
     maxTokens: 16384,
   });
@@ -116,12 +146,13 @@ export async function generateDigest(db, articles, config) {
   totalInputTokens += assemblyRes.inputTokens;
   totalOutputTokens += assemblyRes.outputTokens;
 
-  // Post-processing: remove any preamble before "#новости"
-  // Claude sometimes adds explanatory text before the actual digest
-  const digestStart = digestContent.indexOf('#новости');
+  // Post-processing: remove any preamble before the digest's real start marker.
+  // Claude sometimes adds explanatory text before the actual digest.
+  const startMarker = isGhost ? '👻 THE GHOST BRIEF' : '#новости';
+  const digestStart = digestContent.indexOf(startMarker);
   if (digestStart > 0) {
     digestContent = digestContent.substring(digestStart);
-    log.push(`Removed ${digestStart} chars of preamble before #новости`);
+    log.push(`Removed ${digestStart} chars of preamble before ${startMarker}`);
   }
 
   // Create digest record
@@ -163,12 +194,12 @@ export async function generateDigest(db, articles, config) {
 
   // Clean up source Telegram messages ONLY after confirming the digest was
   // assembled successfully: digest row exists, content is non-empty, and the
-  // `#новости` marker is present. If anything looks off, skip cleanup so the
-  // source messages remain available for retry.
+  // scenario's start marker is present. If anything looks off, skip cleanup so
+  // the source messages remain available for retry.
   const saved = getDigest(digestId);
   const digestOk = saved && typeof saved.content === 'string'
     && saved.content.length > 100
-    && saved.content.includes('#новости');
+    && saved.content.includes(startMarker);
 
   if (!digestOk) {
     log.push('Skipping source cleanup: digest not confirmed valid');

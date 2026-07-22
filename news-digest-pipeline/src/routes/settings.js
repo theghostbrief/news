@@ -52,6 +52,13 @@ const SCENARIO_OPTIONS = [
     promptFile: 'prompt_deep.md',
     description: 'Cold intellect, techno-philosophy, the "pulling-back camera" method. Phase A system prompt comes from prompt_deep.md.',
   },
+  {
+    id: 'ghost',
+    name: 'The Ghost',
+    subtitle: 'English · defense & security',
+    promptFile: 'en/prompt.md',
+    description: 'Dry, skeptical defense-analyst voice for the English-language Ghost Brief edition. OSINT confidence markers, sober register for casualties. Phase A and Phase B prompts come from prompts/en/.',
+  },
 ];
 const SCENARIO_IDS = SCENARIO_OPTIONS.map((o) => o.id);
 
@@ -108,6 +115,8 @@ function buildSettingsPayload() {
     commentary: { text: config.commentaryPrompt, editable: true },
     assembly: { text: config.assemblyPrompt, editable: true },
     deep: { text: config.deepPrompt, editable: true },
+    ghost: { text: config.ghostCommentaryPrompt, editable: true },
+    ghostAssembly: { text: config.ghostAssemblyPrompt, editable: true },
     scenarios: {
       active: config.activeScenario || 'sarcastic',
       options: SCENARIO_OPTIONS,
@@ -360,6 +369,8 @@ function validatePatch(body) {
   textField('commentary', paths.commentaryPrompt);
   textField('assembly', paths.assemblyPrompt);
   textField('deep', paths.deepPrompt);
+  textField('ghost', paths.ghostCommentaryPrompt);
+  textField('ghostAssembly', paths.ghostAssemblyPrompt);
   textField('content', paths.configMd);
 
   return { errors, env, files };

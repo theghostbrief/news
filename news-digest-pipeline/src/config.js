@@ -29,6 +29,11 @@ export const paths = {
   assemblyPrompt: join(promptsDir, 'assembly_prompt.md'),
   deepPrompt: join(promptsDir, 'prompt_deep.md'),
   configMd: join(promptsDir, 'config.md'),
+  // English "Ghost Brief" edition — separate prompt set, selected via the
+  // 'ghost' scenario. Krol's originals above are left untouched as reference.
+  ghostCommentaryPrompt: join(promptsDir, 'en', 'prompt.md'),
+  ghostAssemblyPrompt: join(promptsDir, 'en', 'assembly_prompt.md'),
+  ghostConfigMd: join(promptsDir, 'en', 'config.md'),
   // Base .env — secrets + defaults. Loaded via docker-compose env_file at
   // startup; NOT written by the dashboard.
   env: join(parentDir, '.env'),
@@ -91,6 +96,31 @@ function parseConfigMd(text) {
 }
 
 /**
+ * Parse the English "Ghost Brief" config.md: just a footer line and a hashtag
+ * line, no course-mention/boundary concept (that was Krol's Facebook-audience
+ * growth mechanic — not part of this edition).
+ */
+function parseGhostConfigMd(text) {
+  const result = { footer: '', hashtagsSuffix: '' };
+  if (!text) return result;
+
+  const sections = text.split(/^## /m);
+  for (const section of sections) {
+    const lines = section.trim().split('\n');
+    const heading = lines[0]?.trim().toLowerCase() || '';
+    const body = lines.slice(1).join('\n').trim();
+
+    if (heading.startsWith('footer')) {
+      result.footer = body;
+    } else if (heading.startsWith('hashtags')) {
+      result.hashtagsSuffix = body;
+    }
+  }
+
+  return result;
+}
+
+/**
  * Build the full settings object from the current environment and source files.
  * Pure read — does not mutate anything.
  */
@@ -100,6 +130,11 @@ function buildConfig() {
   const deepPrompt = readFileOrWarn(paths.deepPrompt, 'prompt_deep.md');
   const configMdRaw = readFileOrWarn(paths.configMd, 'config.md');
   const parsedConfig = parseConfigMd(configMdRaw);
+
+  const ghostCommentaryPrompt = readFileOrWarn(paths.ghostCommentaryPrompt, 'en/prompt.md');
+  const ghostAssemblyPrompt = readFileOrWarn(paths.ghostAssemblyPrompt, 'en/assembly_prompt.md');
+  const ghostConfigMdRaw = readFileOrWarn(paths.ghostConfigMd, 'en/config.md');
+  const parsedGhostConfig = parseGhostConfigMd(ghostConfigMdRaw);
 
   return {
     port: parseInt(process.env.PORT || '3000', 10),
@@ -188,6 +223,13 @@ function buildConfig() {
     courseMention: parsedConfig.courseMention,
     boundaryIntent: parsedConfig.boundaryIntent,
     hashtagsSuffix: parsedConfig.hashtagsSuffix,
+
+    // English "Ghost Brief" edition — 'ghost' scenario prompts + config
+    ghostCommentaryPrompt,
+    ghostAssemblyPrompt,
+    ghostConfigMdRaw,
+    ghostFooter: parsedGhostConfig.footer,
+    ghostHashtags: parsedGhostConfig.hashtagsSuffix,
   };
 }
 

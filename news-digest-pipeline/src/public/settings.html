@@ -853,14 +853,31 @@
         const isActiveSel = selectedScenario === sc.active;
         const selOpt = sc.options.find((o) => o.id === selectedScenario) || {};
         let scenarioPrompt = '';
+        let assemblySection = '';
         if (selectedScenario === 'sarcastic') {
           scenarioPrompt = promptBlock('commentary', 'Commentary style → prompt.md', d.commentary.text,
             'Phase A system prompt for the "Sarcasm" scenario: sarcastic, informal authorial tone and rewriting rules.',
             isActiveSel);
+          assemblySection = `<div class="group-subtitle">Shared stage · applies to Sarcasm & Architect</div>` +
+            promptBlock('assembly', 'Digest assembly → assembly_prompt.md', d.assembly.text,
+              'Phase B system prompt: mechanically assembles the finished commentary into the final digest (numbering, course mention, boundary, hashtags). Shared by the Sarcasm and Architect scenarios.',
+              false);
         } else if (selectedScenario === 'architect') {
           scenarioPrompt = promptBlock('deep', 'Deep prompt → prompt_deep.md', d.deep.text,
             'Phase A system prompt for the "Architect" scenario: cold techno-philosophical analysis, the "pulling-back camera" method.',
             isActiveSel);
+          assemblySection = `<div class="group-subtitle">Shared stage · applies to Sarcasm & Architect</div>` +
+            promptBlock('assembly', 'Digest assembly → assembly_prompt.md', d.assembly.text,
+              'Phase B system prompt: mechanically assembles the finished commentary into the final digest (numbering, course mention, boundary, hashtags). Shared by the Sarcasm and Architect scenarios.',
+              false);
+        } else if (selectedScenario === 'ghost') {
+          scenarioPrompt = promptBlock('ghost', 'Ghost persona → prompts/en/prompt.md', d.ghost.text,
+            'Phase A system prompt for the English "Ghost Brief" edition: dry, skeptical defense-analyst voice, OSINT confidence markers, sober register for casualties.',
+            isActiveSel);
+          assemblySection = `<div class="group-subtitle">Ghost Brief assembly → prompts/en/assembly_prompt.md</div>` +
+            promptBlock('ghostAssembly', 'Digest assembly (English edition)', d.ghostAssembly.text,
+              'Phase B system prompt for the Ghost Brief edition: emits the SEG/TOP3 machine-readable markers and inserts the English footer + hashtags. Independent from Krol\'s Russian assembly prompt above.',
+              false);
         }
         const inactiveNote = isActiveSel
           ? ''
@@ -868,7 +885,7 @@
         html = `
           <div class="card active">
             <h2>Scenarios</h2>
-            <p class="card-desc">Choose a scenario — only its stages and Phase A prompt are shown below. Digest assembly (Phase B) is shared across all scenarios.</p>
+            <p class="card-desc">Choose a scenario — only its stages and prompts are shown below. The Ghost Brief (English) edition has its own independent assembly prompt.</p>
 
             <div class="group-subtitle">Scenario selection</div>
             ${cards}
@@ -881,10 +898,7 @@
             ${inactiveNote}
             ${scenarioPrompt}
 
-            <div class="group-subtitle">Shared stage · applies to all scenarios</div>
-            ${promptBlock('assembly', 'Digest assembly → assembly_prompt.md', d.assembly.text,
-              'Phase B system prompt: mechanically assembles the finished commentary into the final digest (numbering, course mention, boundary, hashtags). Applies in any scenario.',
-              false)}
+            ${assemblySection}
           </div>`;
       } else if (active === 'help') {
         html = `
@@ -989,11 +1003,13 @@
           checkIntervalMs: parseInt(document.getElementById('f-checkIntervalMs').value, 10),
         };
       }
-      if (id === 'commentary') return { commentary: { text: document.getElementById('ta-commentary').value } };
-      if (id === 'assembly')   return { assembly:   { text: document.getElementById('ta-assembly').value } };
-      if (id === 'deep')       return { deep:       { text: document.getElementById('ta-deep').value } };
-      if (id === 'content')    return { content:    { text: document.getElementById('ta-content').value } };
-      if (id === 'scenarios')  return { activeScenario: selectedScenario };
+      if (id === 'commentary')     return { commentary:     { text: document.getElementById('ta-commentary').value } };
+      if (id === 'assembly')       return { assembly:       { text: document.getElementById('ta-assembly').value } };
+      if (id === 'deep')           return { deep:           { text: document.getElementById('ta-deep').value } };
+      if (id === 'ghost')          return { ghost:          { text: document.getElementById('ta-ghost').value } };
+      if (id === 'ghostAssembly')  return { ghostAssembly:  { text: document.getElementById('ta-ghostAssembly').value } };
+      if (id === 'content')        return { content:        { text: document.getElementById('ta-content').value } };
+      if (id === 'scenarios')      return { activeScenario: selectedScenario };
       return {};
     }
 
