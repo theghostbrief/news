@@ -47,6 +47,11 @@ export function initDb(dbPath) {
   if (!digestCols.has('cost_usd')) {
     db.exec('ALTER TABLE digests ADD COLUMN cost_usd REAL');
   }
+  if (!digestCols.has('script_warning')) {
+    // Set by digest-generator.js's post-generation non-Latin-script check
+    // (script-guard.js) — NULL when clean, a human-readable summary otherwise.
+    db.exec('ALTER TABLE digests ADD COLUMN script_warning TEXT');
+  }
 
   return db;
 }
@@ -143,7 +148,7 @@ export function createDigest({ date, part = 1, articlesCount = 0 }) {
 export function updateDigest(id, fields) {
   const allowed = ['content', 'status', 'generation_log', 'published_at',
     'facebook_post_id', 'telegram_message_id', 'youtube_post_id', 'articles_count',
-    'model', 'input_tokens', 'output_tokens', 'cost_usd'];
+    'model', 'input_tokens', 'output_tokens', 'cost_usd', 'script_warning'];
   const updates = [];
   const values = [];
 

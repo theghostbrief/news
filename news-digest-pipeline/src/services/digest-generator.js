@@ -12,6 +12,7 @@ import {
 } from '../db/index.js';
 import { priceFor } from '../data/model-catalog.js';
 import { callModel, sleep } from './llm.js';
+import { findUnquotedNonLatinRuns, describeScriptIssues } from './script-guard.js';
 
 const MAX_CONTENT_LENGTH = 3000;
 const INTER_CALL_DELAY_MS = 200;
@@ -73,9 +74,35 @@ export async function generateDigest(db, articles, config) {
         user: userMessage,
         maxTokens: 512,
       });
-      const commentary = res.text;
+      let commentary = res.text;
       totalInputTokens += res.inputTokens;
       totalOutputTokens += res.outputTokens;
+
+      // Script guard: only meaningful for English-output scenarios (Krol's
+      // Russian scenarios legitimately output Cyrillic — flagging that would
+      // be a false positive). Catches stray non-English-script words a model
+      // sometimes drops into otherwise-English text (seen with gpt-5.6-terra,
+      // 2026-07-22) — auto-retry the single item once before falling back to
+      // flagging the whole digest for manual review.
+      if (isGhost) {
+        const issues = findUnquotedNonLatinRuns(commentary);
+        if (issues.length > 0) {
+          log.push(`Non-Latin script in article ${article.id}: ${describeScriptIssues(issues)} — retrying once`);
+          const retryRes = await callModel(config, {
+            system: commentarySystem,
+            user: userMessage,
+            maxTokens: 512,
+          });
+          totalInputTokens += retryRes.inputTokens;
+          totalOutputTokens += retryRes.outputTokens;
+          const retryIssues = findUnquotedNonLatinRuns(retryRes.text);
+          commentary = retryRes.text;
+          log.push(retryIssues.length === 0
+            ? `Retry for article ${article.id} is clean`
+            : `Retry for article ${article.id} still has non-Latin script: ${describeScriptIssues(retryIssues)} — will flag digest`);
+        }
+      }
+
       updateArticleCommentary(article.id, commentary);
       article.commentary = commentary;
 
@@ -155,6 +182,22 @@ export async function generateDigest(db, articles, config) {
     log.push(`Removed ${digestStart} chars of preamble before ${startMarker}`);
   }
 
+  // Final script-guard sweep over the fully assembled digest — the per-item
+  // retry above already catches most cases, but this is the last line of
+  // defense (also covers headlines/the "Ghost's read" line, which Phase B
+  // generates itself and which the per-item retry can't reach). English-only
+  // scenario, same reasoning as above.
+  let scriptWarning = null;
+  if (isGhost) {
+    const finalIssues = findUnquotedNonLatinRuns(digestContent);
+    if (finalIssues.length > 0) {
+      scriptWarning = `Non-Latin script detected: ${describeScriptIssues(finalIssues)} — review before publishing.`;
+      log.push(`WARNING: ${scriptWarning}`);
+    } else {
+      log.push('Script check: clean (no unquoted non-Latin script detected)');
+    }
+  }
+
   // Create digest record
   const digestId = createDigest({
     date: today,
@@ -181,6 +224,7 @@ export async function generateDigest(db, articles, config) {
     input_tokens: totalInputTokens,
     output_tokens: totalOutputTokens,
     cost_usd: costUsd,
+    script_warning: scriptWarning,
   });
 
   // Assign articles to digest

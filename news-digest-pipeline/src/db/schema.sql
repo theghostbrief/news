@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS digests (
   input_tokens INTEGER DEFAULT 0,
   output_tokens INTEGER DEFAULT 0,
   cost_usd REAL,
+  script_warning TEXT,
   published_at TEXT,
   facebook_post_id TEXT,
   telegram_message_id TEXT,
