@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Настройки · News Digest</title>
+  <title>Settings · News Digest</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -479,7 +479,7 @@
       .card { padding: 18px; }
     }
 
-    /* Tab bar (shared across Дайджесты / Публикация / Настройки) */
+    /* Tab bar (shared across Digests / Publishing / Settings) */
     .tabs {
       display: flex;
       gap: 2px;
@@ -509,25 +509,25 @@
 <body>
   <div class="container">
     <div class="header">
-      <h1>Настройки</h1>
+      <h1>Settings</h1>
     </div>
-    <p class="subtitle" id="subtitle">Конфигурация пайплайна и промптов</p>
+    <p class="subtitle" id="subtitle">Pipeline and prompt configuration</p>
     <nav class="tabs">
-      <a class="tab" href="index.html">Дайджесты</a>
-      <a class="tab" href="articles.html">Статьи</a>
-      <a class="tab" href="syndication.html">Публикация</a>
-      <a class="tab active" href="settings.html">Настройки</a>
-      <a class="tab" href="moderation.html">Модерация</a>
+      <a class="tab" href="index.html">Digests</a>
+      <a class="tab" href="articles.html">Articles</a>
+      <a class="tab" href="syndication.html">Publishing</a>
+      <a class="tab active" href="settings.html">Settings</a>
+      <a class="tab" href="moderation.html">Moderation</a>
     </nav>
 
     <div class="auth-bar" id="authbar">
-      <span class="auth-ro">👁 Режим просмотра — вы не авторизованы. Можно смотреть, но не менять.</span>
-      <span class="auth-ok">✅ Вы авторизованы — изменения доступны.</span>
-      <a class="btn-login" href="#" id="btn-login">Войти</a>
-      <a class="btn-logout" href="#" id="btn-logout">Выйти</a>
+      <span class="auth-ro">👁 Read-only mode — you are not signed in. You can view, but not change anything.</span>
+      <span class="auth-ok">✅ You are signed in — changes are enabled.</span>
+      <a class="btn-login" href="#" id="btn-login">Sign in</a>
+      <a class="btn-logout" href="#" id="btn-logout">Sign out</a>
     </div>
 
-    <div id="loading" class="loading">Загрузка настроек…</div>
+    <div id="loading" class="loading">Loading settings…</div>
 
     <div class="layout" id="layout" style="display:none">
       <nav class="nav" id="nav"></nav>
@@ -537,12 +537,12 @@
 
   <script>
     const GROUPS = [
-      { id: 'general',    title: 'Общие' },
-      { id: 'queue',      title: 'Очередь и генерация' },
-      { id: 'scenarios',  title: 'Сценарии' },
-      { id: 'content',    title: 'Контент' },
-      { id: 'publishing', title: 'Публикация' },
-      { id: 'help',       title: 'Помощь' },
+      { id: 'general',    title: 'General' },
+      { id: 'queue',      title: 'Queue & generation' },
+      { id: 'scenarios',  title: 'Scenarios' },
+      { id: 'content',    title: 'Content' },
+      { id: 'publishing', title: 'Publishing' },
+      { id: 'help',       title: 'Help' },
     ];
 
     let DATA = null;
@@ -577,7 +577,7 @@
 
     function textareaCard(id, title, desc, value, purpose) {
       const purposeHtml = purpose
-        ? `<div class="purpose"><b>Назначение:</b> ${esc(purpose)}</div>`
+        ? `<div class="purpose"><b>Purpose:</b> ${esc(purpose)}</div>`
         : '';
       return `
         <div class="card active">
@@ -594,19 +594,19 @@
     function saveBar(id) {
       return `
         <div class="save-bar">
-          <button class="btn btn-primary" id="save-${id}">Сохранить</button>
+          <button class="btn btn-primary" id="save-${id}">Save</button>
           <span class="status" id="status-${id}"></span>
         </div>`;
     }
 
     function lockNotice() {
-      return '<div class="lock-notice">🔒 Содержимое доступно только после входа. Войдите, чтобы просмотреть и редактировать.</div>';
+      return '<div class="lock-notice">🔒 Content is available only after signing in. Sign in to view and edit.</div>';
     }
 
     function promptBlock(id, title, value, purpose, usedNow) {
-      const used = usedNow ? '<span class="badge on">используется сейчас</span>' : '';
+      const used = usedNow ? '<span class="badge on">in use now</span>' : '';
       const purposeHtml = purpose
-        ? `<div class="purpose"><b>Назначение:</b> ${esc(purpose)}</div>`
+        ? `<div class="purpose"><b>Purpose:</b> ${esc(purpose)}</div>`
         : '';
       const body = READONLY
         ? lockNotice()
@@ -627,7 +627,7 @@
           <span class="secret-label">${label}</span>
           <span class="secret-meta">
             <span class="secret-hint">${on ? esc(masked.hint) : '—'}</span>
-            <span class="badge ${on ? 'on' : 'off'}">${on ? 'настроено' : 'не настроено'}</span>
+            <span class="badge ${on ? 'on' : 'off'}">${on ? 'configured' : 'not configured'}</span>
           </span>
         </div>`;
     }
@@ -639,7 +639,7 @@
           <span class="secret-label">${esc(label)}</span>
           <span class="secret-meta">
             <span class="secret-hint">${on ? esc(masked.hint) : '—'}</span>
-            <span class="badge planned">заглушка</span>
+            <span class="badge planned">coming soon</span>
           </span>
         </div>
         <div class="status-note">${esc(statusText || '')}</div>`;
@@ -647,13 +647,13 @@
 
     // Enabled pro features, populated from /api/features before load() renders.
     // In the public/open-core build this stays empty, so the paid distribution
-    // roadmap ("Планируемые интеграции") is not shown.
+    // roadmap ("Planned integrations") is not shown.
     let PRO_FEATURES = [];
 
     function plannedSection(planned) {
       if (!planned || !PRO_FEATURES.includes('distribution')) return '';
-      let out = '<div class="group-subtitle">Планируемые интеграции</div>';
-      out += '<div class="status-note">Пайплайны будут добавлены позже. Сейчас отображается только статус и наличие секрета в .env.</div>';
+      let out = '<div class="group-subtitle">Planned integrations</div>';
+      out += '<div class="status-note">Pipelines will be added later. Currently only status and secret presence in .env are shown.</div>';
       if (planned.instagram) {
         out += plannedRow('Instagram · Access Token', planned.instagram.accessToken, planned.instagram.status);
         out += plannedRow('Instagram · Account ID', planned.instagram.accountId, '');
@@ -687,12 +687,12 @@
         const modelList = catalog[vendor] || [];
         const inList = modelList.some((m) => m.id === currentModel);
         const priceHint = (m) => m.pricing
-          ? ` — $${m.pricing.input}/$${m.pricing.output} за 1M`
+          ? ` — $${m.pricing.input}/$${m.pricing.output} per 1M`
           : '';
         const modelOpts = modelList.map((m) =>
           `<option value="${esc(m.id)}" ${m.id === currentModel ? 'selected' : ''}>${esc(m.label)}${esc(priceHint(m))}</option>`
         ).join('') +
-          `<option value="__custom__" ${!inList ? 'selected' : ''}>Другая (ввести вручную)…</option>`;
+          `<option value="__custom__" ${!inList ? 'selected' : ''}>Other (enter manually)…</option>`;
         const customDisplay = inList ? 'none' : 'block';
 
         // OpenAI reasoning effort — vendor-conditional (only meaningful for OpenAI).
@@ -701,46 +701,46 @@
           || ['minimal', 'low', 'medium', 'high'];
         const reasoningInList = reasoningSuggestions.includes(reasoning);
         const reasoningOpts =
-          `<option value="">— не задано (по умолчанию) —</option>` +
+          `<option value="">— not set (default) —</option>` +
           reasoningSuggestions.map((r) =>
             `<option value="${esc(r)}" ${r === reasoning ? 'selected' : ''}>${esc(r)}</option>`
           ).join('') +
           (reasoning && !reasoningInList
-            ? `<option value="${esc(reasoning)}" selected>${esc(reasoning)} (из .env)</option>`
+            ? `<option value="${esc(reasoning)}" selected>${esc(reasoning)} (from .env)</option>`
             : '');
         const reasoningDisplay = vendor === 'openai' ? 'block' : 'none';
         html = `
           <div class="card active">
-            <h2>Общие</h2>
-            <p class="card-desc">Базовые параметры приложения. Вендор и модель используются для генерации комментариев и сборки дайджеста.</p>
+            <h2>General</h2>
+            <p class="card-desc">Base application settings. Vendor and model are used for generating commentary and assembling the digest.</p>
             <div class="field">
-              <label>Вендор — провайдер LLM</label>
+              <label>Vendor — LLM provider</label>
               <select id="f-llmVendor">${vendorOpts}</select>
-              <div class="hint">Хранится в LLM_VENDOR. Определяет, к какому API идут запросы: Anthropic или OpenAI.</div>
+              <div class="hint">Stored in LLM_VENDOR. Determines which API requests go to: Anthropic or OpenAI.</div>
             </div>
             <div class="field">
-              <label>Модель</label>
+              <label>Model</label>
               <select id="f-model">${modelOpts}</select>
-              <input type="text" id="f-modelCustom" style="margin-top:8px;display:${customDisplay}" placeholder="Введите id модели вручную" value="${inList ? '' : esc(currentModel)}">
-              <div class="hint">Список — подсказка, не исчерпывающий. Можно ввести произвольный id через «Другая». Применяется к выбранному вендору; хранится в CLAUDE_MODEL (историческое имя переменной).</div>
+              <input type="text" id="f-modelCustom" style="margin-top:8px;display:${customDisplay}" placeholder="Enter a model id manually" value="${inList ? '' : esc(currentModel)}">
+              <div class="hint">The list is a suggestion, not exhaustive. You can enter any id via "Other". Applies to the selected vendor; stored in CLAUDE_MODEL (historical variable name).</div>
             </div>
             <div class="field" id="field-reasoning" style="display:${reasoningDisplay}">
-              <label>Reasoning effort — только OpenAI</label>
+              <label>Reasoning effort — OpenAI only</label>
               <select id="f-openaiReasoningEffort">${reasoningOpts}</select>
-              <div class="hint">Глубина размышления модели (OPENAI_REASONING_EFFORT). «Не задано» = как сейчас, параметр не отправляется. Список — подсказка; OpenAI рекомендует начинать с medium и повышать только при нехватке качества.</div>
+              <div class="hint">Model reasoning depth (OPENAI_REASONING_EFFORT). "Not set" = as now, the parameter isn't sent. The list is a suggestion; OpenAI recommends starting with medium and raising it only if quality is lacking.</div>
             </div>
             <div class="field">
               <label>Anthropic endpoint (ANTHROPIC_BASE_URL)</label>
               <input type="text" id="f-anthropicBaseUrl" placeholder="${esc((g.anthropicBaseUrl && g.anthropicBaseUrl.placeholder) || 'https://api.anthropic.com')}" value="${esc((g.anthropicBaseUrl && g.anthropicBaseUrl.value) || '')}">
-              <div class="hint">Оставьте пустым для значения по умолчанию.</div>
+              <div class="hint">Leave empty for the default value.</div>
             </div>
             <div class="field">
               <label>OpenAI endpoint (OPENAI_BASE_URL)</label>
               <input type="text" id="f-openaiBaseUrl" placeholder="${esc((g.openaiBaseUrl && g.openaiBaseUrl.placeholder) || 'https://api.openai.com/v1')}" value="${esc((g.openaiBaseUrl && g.openaiBaseUrl.value) || '')}">
-              <div class="hint">Оставьте пустым для значения по умолчанию.</div>
+              <div class="hint">Leave empty for the default value.</div>
             </div>
             <div class="field">
-              <label>Окружение (NODE_ENV)</label>
+              <label>Environment (NODE_ENV)</label>
               <input type="text" value="${esc(g.nodeEnv.value)}" readonly>
             </div>
             <div class="field">
@@ -748,37 +748,37 @@
               <input type="text" value="${esc(g.baseUrl.value)}" readonly>
             </div>
             <div class="field">
-              <label>Путь к БД (DB_PATH)</label>
+              <label>DB path (DB_PATH)</label>
               <input type="text" value="${esc(g.dbPath.value)}" readonly>
             </div>
             <div class="field">
-              <label>Тема уведомлений (NTFY_TOPIC)</label>
+              <label>Notification topic (NTFY_TOPIC)</label>
               <input type="text" value="${esc((g.ntfyTopic && g.ntfyTopic.value) || '')}" readonly>
-              <div class="hint">Канал ntfy для служебных уведомлений. Меняется только в .env.</div>
+              <div class="hint">The ntfy channel for service notifications. Changed only in .env.</div>
             </div>
-            <div class="hint">API-ключи задаются в разделе «Публикация» / в файле .env.</div>
+            <div class="hint">API keys are set in the "Publishing" section / in the .env file.</div>
             ${saveBar('general')}
           </div>`;
       } else if (active === 'queue') {
         const q = d.queue;
         html = `
           <div class="card active">
-            <h2>Очередь и генерация</h2>
-            <p class="card-desc">Когда в очереди накопится достаточно статей, пайплайн автоматически собирает дайджест.</p>
+            <h2>Queue & generation</h2>
+            <p class="card-desc">Once enough articles have accumulated in the queue, the pipeline automatically assembles a digest.</p>
             <div class="row2">
               <div class="field">
-                <label>Порог статей (ARTICLE_THRESHOLD)</label>
+                <label>Article threshold (ARTICLE_THRESHOLD)</label>
                 <input type="number" id="f-articleThreshold" min="1" max="100" value="${esc(q.articleThreshold.value)}">
-                <div class="hint">Сколько новых статей запускают генерацию (1–100)</div>
+                <div class="hint">How many new articles trigger generation (1–100)</div>
               </div>
               <div class="field">
-                <label>Макс. статей в дайджесте (MAX_ARTICLES_PER_DIGEST)</label>
+                <label>Max articles per digest (MAX_ARTICLES_PER_DIGEST)</label>
                 <input type="number" id="f-maxArticlesPerDigest" min="1" max="100" value="${esc(q.maxArticlesPerDigest.value)}">
-                <div class="hint">Верхняя граница статей на один дайджест (1–100)</div>
+                <div class="hint">Upper limit of articles per digest (1–100)</div>
               </div>
             </div>
             <div class="field">
-              <label>Интервал проверки очереди, мс (CHECK_INTERVAL_MS)</label>
+              <label>Queue check interval, ms (CHECK_INTERVAL_MS)</label>
               <input type="number" id="f-checkIntervalMs" min="5000" max="3600000" step="1000" value="${esc(q.checkIntervalMs.value)}">
               <div class="hint">${esc(q.checkIntervalMs.note || '')} (5000–3600000)</div>
             </div>
@@ -793,17 +793,17 @@
             <div class="field">
               <textarea class="mono" id="ta-content">${esc(c.text)}</textarea>
             </div>
-            <div class="group-subtitle">Распарсенные значения (только для справки)</div>
+            <div class="group-subtitle">Parsed values (reference only)</div>
             <div class="preview-grid">
-              <div class="pv"><b>Хэштег:</b> ${esc(p.hashtag)}</div>
-              <div class="pv"><b>Упоминание курса:</b> ${esc(p.courseMention)}</div>
-              <div class="pv"><b>Граница/дисклеймер:</b> ${esc(p.boundaryIntent)}</div>
-              <div class="pv"><b>Хэштеги в конце:</b> ${esc(p.hashtagsSuffix)}</div>
+              <div class="pv"><b>Hashtag:</b> ${esc(p.hashtag)}</div>
+              <div class="pv"><b>Course mention:</b> ${esc(p.courseMention)}</div>
+              <div class="pv"><b>Boundary/disclaimer:</b> ${esc(p.boundaryIntent)}</div>
+              <div class="pv"><b>Trailing hashtags:</b> ${esc(p.hashtagsSuffix)}</div>
             </div>`;
         html = `
           <div class="card active">
-            <h2>Контент</h2>
-            <p class="card-desc">Настройки оформления дайджеста: хэштеги, упоминание курса, граница/дисклеймер (config.md).</p>
+            <h2>Content</h2>
+            <p class="card-desc">Digest formatting settings: hashtags, course mention, boundary/disclaimer (config.md).</p>
             ${contentBody}
             ${saveBar('content')}
           </div>`;
@@ -811,18 +811,18 @@
         const pub = d.publishing;
         html = `
           <div class="card active">
-            <h2>Публикация</h2>
-            <p class="card-desc">Секреты и токены интеграций. В целях безопасности редактируются только в файле <code>.env</code>, не через этот интерфейс.</p>
+            <h2>Publishing</h2>
+            <p class="card-desc">Integration secrets and tokens. For security, these are only edited in the <code>.env</code> file, not through this interface.</p>
             <div class="group-subtitle">Telegram</div>
             ${secretRow('Bot Token', pub.telegram.botToken)}
             ${secretRow('Chat ID', pub.telegram.chatId)}
             ${secretRow('Publish Chat ID', pub.telegram.publishChatId)}
             ${secretRow('Webhook Secret', pub.telegram.webhookSecret)}
             <div class="group-subtitle">Facebook</div>
-            <div class="status-note"><span class="badge on">Только Публичная страница (Page)</span> Легальный путь. Постинг в личный профиль не поддерживается.</div>
+            <div class="status-note"><span class="badge on">Page only</span> The legal path. Posting to a personal profile is not supported.</div>
             ${secretRow('Page ID', pub.facebook.pageId)}
             ${secretRow('Page Access Token', pub.facebook.pageAccessToken)}
-            <div class="group-subtitle">API ключи</div>
+            <div class="group-subtitle">API Keys</div>
             ${secretRow('Anthropic API Key', pub.anthropicApiKey)}
             ${secretRow('OpenAI API Key', pub.openaiApiKey)}
             ${secretRow('Fal Key', pub.falKey)}
@@ -835,9 +835,9 @@
           const isSel = o.id === selectedScenario;
           const isActive = o.id === sc.active;
           const badge = o.id === 'architect'
-            ? `<span class="badge serious">мощный режим</span>`
-            : `<span class="badge current">текущий</span>`;
-          const activeMark = isActive ? `<span class="badge on">активен</span>` : '';
+            ? `<span class="badge serious">power mode</span>`
+            : `<span class="badge current">current</span>`;
+          const activeMark = isActive ? `<span class="badge on">active</span>` : '';
           return `
             <button class="scenario-card ${isSel ? 'selected' : ''}" data-scenario="${esc(o.id)}">
               <div class="scenario-head">
@@ -854,51 +854,51 @@
         const selOpt = sc.options.find((o) => o.id === selectedScenario) || {};
         let scenarioPrompt = '';
         if (selectedScenario === 'sarcastic') {
-          scenarioPrompt = promptBlock('commentary', 'Стиль комментариев → prompt.md', d.commentary.text,
-            'системный промпт Фазы A для сценария «Сарказм»: саркастичный, неформальный авторский тон и правила переписывания.',
+          scenarioPrompt = promptBlock('commentary', 'Commentary style → prompt.md', d.commentary.text,
+            'Phase A system prompt for the "Sarcasm" scenario: sarcastic, informal authorial tone and rewriting rules.',
             isActiveSel);
         } else if (selectedScenario === 'architect') {
-          scenarioPrompt = promptBlock('deep', 'Глубокий промпт → prompt_deep.md', d.deep.text,
-            'системный промпт Фазы A для сценария «Архитектор»: холодная техно-философская аналитика, метод «отъезжающей камеры».',
+          scenarioPrompt = promptBlock('deep', 'Deep prompt → prompt_deep.md', d.deep.text,
+            'Phase A system prompt for the "Architect" scenario: cold techno-philosophical analysis, the "pulling-back camera" method.',
             isActiveSel);
         }
         const inactiveNote = isActiveSel
           ? ''
-          : `<div class="help-note">Сценарий «${esc(selOpt.name || selectedScenario)}» выбран, но ещё не активен. Нажмите <b>«Сделать активным»</b>, чтобы пайплайн начал использовать его промпт.</div>`;
+          : `<div class="help-note">Scenario "${esc(selOpt.name || selectedScenario)}" is selected but not yet active. Click <b>"Activate"</b> so the pipeline starts using its prompt.</div>`;
         html = `
           <div class="card active">
-            <h2>Сценарии</h2>
-            <p class="card-desc">Выберите сценарий — ниже показываются только его этапы и промпт Фазы A. Сборка дайджеста (Фаза B) общая для всех сценариев.</p>
+            <h2>Scenarios</h2>
+            <p class="card-desc">Choose a scenario — only its stages and Phase A prompt are shown below. Digest assembly (Phase B) is shared across all scenarios.</p>
 
-            <div class="group-subtitle">Выбор сценария</div>
+            <div class="group-subtitle">Scenario selection</div>
             ${cards}
             <div class="save-bar">
-              <button class="btn btn-primary" id="save-scenarios">Сделать активным</button>
+              <button class="btn btn-primary" id="save-scenarios">Activate</button>
               <span class="status" id="status-scenarios"></span>
             </div>
 
-            <div class="group-subtitle">Промпт сценария «${esc(selOpt.name || selectedScenario)}»</div>
+            <div class="group-subtitle">Scenario prompt "${esc(selOpt.name || selectedScenario)}"</div>
             ${inactiveNote}
             ${scenarioPrompt}
 
-            <div class="group-subtitle">Общий этап · для всех сценариев</div>
-            ${promptBlock('assembly', 'Сборка дайджеста → assembly_prompt.md', d.assembly.text,
-              'системный промпт Фазы B: механическая сборка готовых комментариев в финальный дайджест (нумерация, упоминание курса, граница, хэштеги). Применяется в любом сценарии.',
+            <div class="group-subtitle">Shared stage · applies to all scenarios</div>
+            ${promptBlock('assembly', 'Digest assembly → assembly_prompt.md', d.assembly.text,
+              'Phase B system prompt: mechanically assembles the finished commentary into the final digest (numbering, course mention, boundary, hashtags). Applies in any scenario.',
               false)}
           </div>`;
       } else if (active === 'help') {
         html = `
           <div class="card active">
-            <h2>Помощь</h2>
-            <p class="card-desc">Что на что влияет.</p>
-            <div class="help-block"><h3>Общие</h3><p>Модель Claude задаёт, какая версия модели используется и для генерации комментариев, и для сборки дайджеста.</p></div>
-            <div class="help-block"><h3>Очередь и генерация</h3><p>Порог статей — сколько новых статей должно накопиться, чтобы автоматически запустить генерацию. Макс. статей — верхняя граница на один дайджест. Интервал — как часто пайплайн проверяет очередь.</p></div>
-            <div class="help-block"><h3>Сценарии</h3><p>Сценарий задаёт системный промпт Фазы A (авторский комментарий к статье). Взаимоисключающие: «Сарказм» (prompt.md) и «Архитектор» (prompt_deep.md) — активен ровно один. Общий для обоих — «Сборка дайджеста» (assembly_prompt.md, Фаза B): нумерация, упоминание курса, граница и хэштеги. Все три промпта редактируются прямо в этом разделе; кнопка «Сохранить выбор» переключает активный сценарий.</p></div>
-            <div class="help-block"><h3>Контент</h3><p>Оформление дайджеста: основной хэштег, текст упоминания курса, граница/дисклеймер и хэштеги в конце поста (config.md). Применяется в любом сценарии.</p></div>
-            <div class="help-block"><h3>Публикация</h3><p>Токены Telegram, Facebook и API-ключи. Управляют тем, куда и от чьего имени публикуются дайджесты.</p></div>
+            <h2>Help</h2>
+            <p class="card-desc">What affects what.</p>
+            <div class="help-block"><h3>General</h3><p>The Claude model setting determines which model version is used both for generating commentary and for assembling the digest.</p></div>
+            <div class="help-block"><h3>Queue & generation</h3><p>Article threshold — how many new articles must accumulate to automatically trigger generation. Max articles — the upper limit per digest. Interval — how often the pipeline checks the queue.</p></div>
+            <div class="help-block"><h3>Scenarios</h3><p>A scenario sets the Phase A system prompt (authorial commentary on an article). Mutually exclusive: "Sarcasm" (prompt.md) and "Architect" (prompt_deep.md) — exactly one is active. Shared by both is "Digest assembly" (assembly_prompt.md, Phase B): numbering, course mention, boundary, and hashtags. All three prompts are edited right in this section; the "Activate" button switches the active scenario.</p></div>
+            <div class="help-block"><h3>Content</h3><p>Digest formatting: the main hashtag, course-mention text, boundary/disclaimer, and trailing hashtags (config.md). Applies in any scenario.</p></div>
+            <div class="help-block"><h3>Publishing</h3><p>Telegram and Facebook tokens and API keys. Control where and under whose name digests get published.</p></div>
             <div class="help-note">
-              <b>Важно.</b> Секреты (токены, ключи) редактируются только в файле <code>.env</code> на сервере — этот интерфейс их не меняет.
-              Параметр <b>Интервал проверки очереди</b> применяется только после рестарта сервера; остальные значения подхватываются сразу после сохранения.
+              <b>Important.</b> Secrets (tokens, keys) are edited only in the <code>.env</code> file on the server — this interface does not change them.
+              The <b>Queue check interval</b> setting only takes effect after a server restart; other values apply immediately after saving.
             </div>
           </div>`;
       }
@@ -932,9 +932,9 @@
 
       vendorSel.onchange = () => {
         const list = catalog[vendorSel.value] || [];
-        const priceHint = (m) => m.pricing ? ` — $${m.pricing.input}/$${m.pricing.output} за 1M` : '';
+        const priceHint = (m) => m.pricing ? ` — $${m.pricing.input}/$${m.pricing.output} per 1M` : '';
         const opts = list.map((m) => `<option value="${esc(m.id)}">${esc(m.label)}${esc(priceHint(m))}</option>`).join('') +
-          '<option value="__custom__">Другая (ввести вручную)…</option>';
+          '<option value="__custom__">Other (enter manually)…</option>';
         modelSel.innerHTML = opts;
         // Reset selection to first model of the new vendor.
         modelSel.value = list.length ? list[0].id : '__custom__';
@@ -1008,7 +1008,7 @@
     async function save(id, btn) {
       btn.disabled = true;
       const original = btn.textContent;
-      btn.textContent = 'Сохранение…';
+      btn.textContent = 'Saving…';
       try {
         const res = await fetch('/api/settings', {
           method: 'PATCH',
@@ -1017,14 +1017,14 @@
         });
         const data = await res.json();
         if (!res.ok) {
-          const detail = Array.isArray(data.details) ? data.details.join('; ') : (data.error || 'Ошибка');
+          const detail = Array.isArray(data.details) ? data.details.join('; ') : (data.error || 'Error');
           throw new Error(detail);
         }
         DATA = data;
-        showStatus(id, true, 'Сохранено ✓');
+        showStatus(id, true, 'Saved ✓');
         renderPanel();
       } catch (err) {
-        showStatus(id, false, 'Ошибка: ' + err.message);
+        showStatus(id, false, 'Error: ' + err.message);
         btn.disabled = false;
         btn.textContent = original;
       }
@@ -1055,7 +1055,7 @@
     });
 
     // Discover enabled pro features (open-core / public build differ only here).
-    // Populates PRO_FEATURES and hides the "Публикация" tab if absent. Must
+    // Populates PRO_FEATURES and hides the "Publishing" tab if absent. Must
     // resolve before load() renders, so plannedSection() sees PRO_FEATURES.
     const featuresReady = fetch('/api/features')
       .then((r) => (r.ok ? r.json() : { features: [] }))
@@ -1075,7 +1075,7 @@
     loadAuth().finally(() => {
       featuresReady.finally(() => {
         load().catch((err) => {
-          document.getElementById('loading').textContent = 'Не удалось загрузить настройки: ' + err.message;
+          document.getElementById('loading').textContent = 'Failed to load settings: ' + err.message;
         });
       });
     });

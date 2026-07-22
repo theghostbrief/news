@@ -40,17 +40,17 @@ const REASONING_EFFORTS = ['minimal', 'low', 'medium', 'high'];
 const SCENARIO_OPTIONS = [
   {
     id: 'sarcastic',
-    name: 'Сарказм',
-    subtitle: 'текущий',
+    name: 'Sarcasm',
+    subtitle: 'current',
     promptFile: 'prompt.md',
-    description: 'Саркастичный, неформальный, скептический авторский тон. Системный промпт Фазы A берётся из prompt.md.',
+    description: 'Sarcastic, informal, skeptical authorial tone. Phase A system prompt comes from prompt.md.',
   },
   {
     id: 'architect',
-    name: 'Архитектор',
-    subtitle: 'серьёзный · ещё не использовался',
+    name: 'Architect',
+    subtitle: 'serious · not used yet',
     promptFile: 'prompt_deep.md',
-    description: 'Холодный интеллект, техно-философия, метод «отъезжающей камеры». Системный промпт Фазы A берётся из prompt_deep.md.',
+    description: 'Cold intellect, techno-philosophy, the "pulling-back camera" method. Phase A system prompt comes from prompt_deep.md.',
   },
 ];
 const SCENARIO_IDS = SCENARIO_OPTIONS.map((o) => o.id);
@@ -102,7 +102,7 @@ function buildSettingsPayload() {
       checkIntervalMs: {
         value: config.checkIntervalMs,
         editable: true,
-        note: 'Применяется после рестарта сервера',
+        note: 'Applied after a server restart',
       },
     },
     commentary: { text: config.commentaryPrompt, editable: true },
@@ -143,20 +143,20 @@ function buildSettingsPayload() {
         instagram: {
           accessToken: maskSecret(config.instagramAccessToken),
           accountId: maskSecret(config.instagramAccountId),
-          status: 'Пайплайн не реализован — нужно добавить',
+          status: 'Pipeline not implemented — needs to be added',
         },
         tiktok: {
           accessToken: maskSecret(config.tiktokAccessToken),
-          status: 'Пайплайн не реализован — нужно добавить',
+          status: 'Pipeline not implemented — needs to be added',
         },
         youtube: {
           accessToken: maskSecret(config.youtubeAccessToken),
           channelId: maskSecret(config.youtubeChannelId),
-          status: 'Community Posts API недоступен — заглушка',
+          status: 'Community Posts API unavailable — coming soon',
         },
         gemini: {
           apiKey: maskSecret(config.geminiApiKey),
-          status: 'API-ключ для будущих пайплайнов — нужно добавить',
+          status: 'API key for future pipelines — needs to be added',
         },
       },
     },
@@ -251,11 +251,11 @@ function validatePatch(body) {
   if (modelValue !== undefined) {
     const v = modelValue;
     if (typeof v !== 'string' || v.trim().length === 0) {
-      errors.push('claudeModel: должна быть непустой строкой');
+      errors.push('claudeModel: must be a non-empty string');
     } else if (v.length > 200) {
-      errors.push('claudeModel: слишком длинная строка (макс. 200 символов)');
+      errors.push('claudeModel: string too long (max 200 characters)');
     } else if (/[\n\r]/.test(v)) {
-      errors.push('claudeModel: не должна содержать переносы строк');
+      errors.push('claudeModel: must not contain line breaks');
     } else {
       env[ENV_WRITABLE.claudeModel] = v.trim();
     }
@@ -265,7 +265,7 @@ function validatePatch(body) {
   if (body.llmVendor !== undefined) {
     const v = body.llmVendor;
     if (typeof v !== 'string' || !LLM_VENDORS.includes(v)) {
-      errors.push(`llmVendor: должно быть одним из ${LLM_VENDORS.join(', ')}`);
+      errors.push(`llmVendor: must be one of ${LLM_VENDORS.join(', ')}`);
     } else {
       env[ENV_WRITABLE.llmVendor] = v;
     }
@@ -278,19 +278,19 @@ function validatePatch(body) {
     if (body[name] === undefined) return;
     const v = body[name];
     if (typeof v !== 'string') {
-      errors.push(`${name}: должно быть строкой`);
+      errors.push(`${name}: must be a string`);
       return;
     }
     if (v.length > 300) {
-      errors.push(`${name}: слишком длинная строка (макс. 300 символов)`);
+      errors.push(`${name}: string too long (max 300 characters)`);
       return;
     }
     if (/[\n\r]/.test(v)) {
-      errors.push(`${name}: не должно содержать переносы строк`);
+      errors.push(`${name}: must not contain line breaks`);
       return;
     }
     if (v.length > 0 && !/^https?:\/\//.test(v)) {
-      errors.push(`${name}: должно начинаться с http:// или https://`);
+      errors.push(`${name}: must start with http:// or https://`);
       return;
     }
     env[envKey] = v;
@@ -306,11 +306,11 @@ function validatePatch(body) {
   if (body.openaiReasoningEffort !== undefined) {
     const v = body.openaiReasoningEffort;
     if (typeof v !== 'string') {
-      errors.push('openaiReasoningEffort: должно быть строкой');
+      errors.push('openaiReasoningEffort: must be a string');
     } else if (v.length > 20) {
-      errors.push('openaiReasoningEffort: слишком длинная строка (макс. 20 символов)');
+      errors.push('openaiReasoningEffort: string too long (max 20 characters)');
     } else if (v.length > 0 && !/^[a-z]+$/i.test(v)) {
-      errors.push('openaiReasoningEffort: только латинские буквы (например minimal, low, medium, high)');
+      errors.push('openaiReasoningEffort: Latin letters only (e.g. minimal, low, medium, high)');
     } else {
       env[ENV_WRITABLE.openaiReasoningEffort] = v.trim().toLowerCase();
     }
@@ -320,9 +320,9 @@ function validatePatch(body) {
     if (body[name] === undefined) return;
     const v = body[name];
     if (!isInt(v)) {
-      errors.push(`${name}: должно быть целым числом`);
+      errors.push(`${name}: must be an integer`);
     } else if (v < min || v > max) {
-      errors.push(`${name}: должно быть в диапазоне ${min}..${max}`);
+      errors.push(`${name}: must be in range ${min}..${max}`);
     } else {
       env[ENV_WRITABLE[name]] = String(v);
     }
@@ -336,7 +336,7 @@ function validatePatch(body) {
   if (body.activeScenario !== undefined) {
     const v = body.activeScenario;
     if (typeof v !== 'string' || !SCENARIO_IDS.includes(v)) {
-      errors.push(`activeScenario: должно быть одним из ${SCENARIO_IDS.join(', ')}`);
+      errors.push(`activeScenario: must be one of ${SCENARIO_IDS.join(', ')}`);
     } else {
       env[ENV_WRITABLE.activeScenario] = v;
     }
@@ -349,9 +349,9 @@ function validatePatch(body) {
     const text = group && typeof group === 'object' ? group.text : group;
     if (text === undefined) return;
     if (typeof text !== 'string') {
-      errors.push(`${name}.text: должно быть строкой`);
+      errors.push(`${name}.text: must be a string`);
     } else if (Buffer.byteLength(text, 'utf-8') > MAX_TEXT_BYTES) {
-      errors.push(`${name}.text: слишком большой (макс. 100KB)`);
+      errors.push(`${name}.text: too large (max 100KB)`);
     } else {
       files.push({ path: targetPath, contents: text });
     }
@@ -410,7 +410,7 @@ router.patch('/', (req, res) => {
   }
 
   if (Object.keys(env).length === 0 && files.length === 0) {
-    return res.status(400).json({ error: 'Нет допустимых полей для изменения' });
+    return res.status(400).json({ error: 'No valid fields to update' });
   }
 
   try {

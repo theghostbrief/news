@@ -54,7 +54,7 @@ export async function callModel(config, { system, user, maxTokens, model, vendor
 
   if (resolvedVendor === 'openai') {
     if (!config.openaiApiKey) {
-      throw new Error('OpenAI API key не настроен (.env: OPENAI_API_KEY)');
+      throw new Error('OpenAI API key not configured (.env: OPENAI_API_KEY)');
     }
     // Lazy import so the package is never loaded for the anthropic path and a
     // missing install does not break startup.

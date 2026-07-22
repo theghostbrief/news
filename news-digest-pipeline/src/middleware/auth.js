@@ -181,5 +181,5 @@ export function writeAuth(req, res, next) {
   if (SAFE_METHODS.has(req.method.toUpperCase())) return next();
   if (authDisabled()) return next();
   if (hasValidCreds(req)) return next();
-  return res.status(401).json({ error: 'Unauthorized — требуется авторизация для изменений' });
+  return res.status(401).json({ error: 'Unauthorized — authentication required to make changes' });
 }

@@ -77,26 +77,6 @@
       margin-bottom: 20px;
     }
 
-    /* Course banner */
-    .course-banner {
-      background: rgba(124,58,237,0.05);
-      border: 1px solid rgba(124,58,237,0.12);
-      border-radius: 10px;
-      padding: 12px 16px;
-      margin-bottom: 20px;
-      font-size: 14px;
-      color: #8a8580;
-      line-height: 1.6;
-    }
-    .course-banner strong { color: #a78bfa; font-weight: 600; }
-    .course-banner a {
-      color: #7c3aed;
-      text-decoration: none;
-      font-weight: 600;
-      transition: color 0.2s;
-    }
-    .course-banner a:hover { color: #a78bfa; }
-
     /* Auth bar (read-only notice + login) */
     .auth-bar {
       display: none;
@@ -477,7 +457,7 @@
     ::-webkit-scrollbar-thumb { background: #ddd8d0; border-radius: 4px; }
     ::-webkit-scrollbar-thumb:hover { background: #b0aaa4; }
 
-    /* Tab bar (shared across Дайджесты / Публикация / Настройки) */
+    /* Tab bar (shared across Digests / Publishing / Settings) */
     .tabs {
       display: flex;
       gap: 2px;
@@ -512,49 +492,44 @@
         <span class="version-badge">v2.2.0 &middot; 17.07.2026</span>
       </div>
     </div>
-    <p class="subtitle" id="subtitle">Загрузка...</p>
+    <p class="subtitle" id="subtitle">Loading...</p>
     <nav class="tabs">
-      <a class="tab active" href="index.html">Дайджесты</a>
-      <a class="tab" href="articles.html">Статьи</a>
-      <a class="tab" href="syndication.html">Публикация</a>
-      <a class="tab" href="settings.html">Настройки</a>
-      <a class="tab" href="moderation.html">Модерация</a>
+      <a class="tab active" href="index.html">Digests</a>
+      <a class="tab" href="articles.html">Articles</a>
+      <a class="tab" href="syndication.html">Publishing</a>
+      <a class="tab" href="settings.html">Settings</a>
+      <a class="tab" href="moderation.html">Moderation</a>
     </nav>
-    <div class="course-banner">
-      Проект реализован в рамках учебного курса: <strong>Создание ИИ Агентов и приложений для бизнеса, роста, дохода и кайфа.</strong>
-      Хотите научиться делать такое же? Попробуйте этот курс. 14 дней пробный период:
-      <a href="https://alexeykrol.com/ai_full/" target="_blank" rel="noopener">alexeykrol.com/ai_full/</a>
-    </div>
     <div class="auth-bar" id="authbar">
-      <span class="auth-ro">👁 Режим просмотра — вы не авторизованы. Можно смотреть, но не менять.</span>
-      <span class="auth-ok">✅ Вы авторизованы — изменения доступны.</span>
-      <a class="btn-login" href="#" id="btn-login">Войти</a>
-      <a class="btn-logout" href="#" id="btn-logout">Выйти</a>
+      <span class="auth-ro">👁 Read-only mode — you are not signed in. You can view, but not change anything.</span>
+      <span class="auth-ok">✅ You are signed in — changes are enabled.</span>
+      <a class="btn-login" href="#" id="btn-login">Sign in</a>
+      <a class="btn-logout" href="#" id="btn-logout">Sign out</a>
     </div>
     <table>
       <thead>
         <tr>
           <th>#</th>
-          <th>Создан</th>
-          <th>Опубликован</th>
-          <th>Статей</th>
-          <th>Стоимость</th>
-          <th>Статус</th>
-          <th>Действия</th>
+          <th>Created</th>
+          <th>Published</th>
+          <th>Articles</th>
+          <th>Cost</th>
+          <th>Status</th>
+          <th>Actions</th>
         </tr>
       </thead>
       <tbody id="tbody"></tbody>
     </table>
-    <p class="refresh-note">Автообновление каждые 30 сек</p>
+    <p class="refresh-note">Auto-refreshes every 30 sec</p>
   </div>
 
   <div class="modal-overlay" id="modal" onclick="if(event.target===this)closeModal()">
     <div class="modal">
       <div class="modal-header">
-        <h2 id="modal-title">Превью</h2>
+        <h2 id="modal-title">Preview</h2>
         <button class="modal-close" onclick="closeModal()">&times;</button>
       </div>
-      <div class="modal-body" id="modal-body">Загрузка...</div>
+      <div class="modal-body" id="modal-body">Loading...</div>
     </div>
   </div>
 
@@ -586,12 +561,12 @@
       const subtitle = document.getElementById('subtitle');
 
       if (digests.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" class="empty">Дайджестов пока нет</td></tr>';
-        subtitle.textContent = 'Нет дайджестов';
+        tbody.innerHTML = '<tr><td colspan="7" class="empty">No digests yet</td></tr>';
+        subtitle.textContent = 'No digests';
         return;
       }
 
-      subtitle.textContent = `Всего дайджестов: ${digests.length}`;
+      subtitle.textContent = `Total digests: ${digests.length}`;
 
       tbody.innerHTML = digests.map((d, i) => {
         const status = d.status || 'draft';
@@ -613,7 +588,7 @@
         // Action buttons — per-platform
         let actionBtn = '';
         if (!hasContent) {
-          actionBtn = '<span style="color:#444;font-size:12px">нет контента</span>';
+          actionBtn = '<span style="color:#444;font-size:12px">no content</span>';
         } else {
           const tgSent = !!d.telegram_message_id;
           const fbSent = !!d.facebook_post_id;
@@ -631,8 +606,8 @@
 
         // Status dropdown
         const statusSelect = `<select class="status-select ${selectClass}" ${READONLY ? 'disabled' : ''} onchange="changeStatus('${d.id}', this)">
-          <option value="draft" ${status !== 'published' ? 'selected' : ''}>Черновик</option>
-          <option value="published" ${status === 'published' ? 'selected' : ''}>Опубликован</option>
+          <option value="draft" ${status !== 'published' ? 'selected' : ''}>Draft</option>
+          <option value="published" ${status === 'published' ? 'selected' : ''}>Published</option>
         </select>`;
 
         // Cost cell
@@ -640,7 +615,7 @@
         if (d.cost_usd !== null && d.cost_usd !== undefined) {
           const inTok = d.input_tokens || 0;
           const outTok = d.output_tokens || 0;
-          const title = `${d.model || 'модель не указана'} · ${inTok}/${outTok} токенов`;
+          const title = `${d.model || 'model not specified'} · ${inTok}/${outTok} tokens`;
           costHtml = `<span class="cost-val" title="${title}">$${Number(d.cost_usd).toFixed(4)}</span>`;
         } else {
           costHtml = '<span class="no-pub">—</span>';
@@ -664,12 +639,12 @@
         const text = await res.text();
         await navigator.clipboard.writeText(text);
         btn.className = 'btn btn-copied';
-        btn.innerHTML = '&#10003; Скопирован';
+        btn.innerHTML = '&#10003; Copied';
         btn.disabled = true;
         btn.onclick = null;
       } catch (err) {
         console.error('Copy failed:', err);
-        alert('Не удалось скопировать: ' + err.message);
+        alert('Failed to copy: ' + err.message);
       }
     }
 
@@ -687,14 +662,14 @@
         setTimeout(loadDigests, 300);
       } catch (err) {
         console.error('Status update failed:', err);
-        alert('Не удалось обновить статус');
+        alert('Failed to update status');
         loadDigests(); // reload to reset
       }
     }
 
     async function publishPlatform(id, platform, btn) {
       const names = { telegram: 'Telegram', facebook: 'Facebook' };
-      if (!confirm('Опубликовать в ' + names[platform] + '?')) return;
+      if (!confirm('Publish to ' + names[platform] + '?')) return;
       btn.disabled = true;
       btn.textContent = '⏳...';
       try {
@@ -712,27 +687,27 @@
           btn.textContent = '✓ ' + (platform === 'telegram' ? 'TG' : 'FB');
           btn.onclick = null;
         } else {
-          alert(names[platform] + ': публикация не удалась. Проверьте токен.');
+          alert(names[platform] + ': publish failed. Check the token.');
           btn.disabled = false;
           btn.textContent = (platform === 'telegram' ? '📨 TG' : '📘 FB');
         }
         setTimeout(loadDigests, 500);
       } catch (err) {
         console.error('Publish failed:', err);
-        alert('Ошибка: ' + err.message);
+        alert('Error: ' + err.message);
         btn.disabled = false;
         btn.textContent = (platform === 'telegram' ? '📨 TG' : '📘 FB');
       }
     }
 
     async function deleteDigest(id) {
-      if (!confirm('Удалить этот дайджест? Статьи вернутся в очередь.')) return;
+      if (!confirm('Delete this digest? Its articles will go back into the queue.')) return;
       try {
         const res = await fetch(`/api/digests/${id}`, { method: 'DELETE' });
         if (!res.ok) throw new Error('Server error');
         loadDigests();
       } catch (err) {
-        alert('Ошибка удаления: ' + err.message);
+        alert('Delete failed: ' + err.message);
       }
     }
 
@@ -740,8 +715,8 @@
       const modal = document.getElementById('modal');
       const body = document.getElementById('modal-body');
       const title = document.getElementById('modal-title');
-      body.textContent = 'Загрузка...';
-      title.textContent = 'Превью дайджеста';
+      body.textContent = 'Loading...';
+      title.textContent = 'Digest preview';
       modal.classList.add('open');
 
       try {
@@ -749,7 +724,7 @@
         const text = await res.text();
         body.textContent = text;
       } catch (err) {
-        body.textContent = 'Ошибка загрузки: ' + err.message;
+        body.textContent = 'Failed to load: ' + err.message;
       }
     }
 
@@ -785,7 +760,7 @@
       window.location.href = '/api/auth/logout?next=' + encodeURIComponent(location.pathname);
     });
 
-    // Hide the "Публикация" tab when the syndication feature isn't mounted
+    // Hide the "Publishing" tab when the syndication feature isn't mounted
     // (open-core / public build). Pure feature discovery — independent of auth.
     fetch('/api/features')
       .then((r) => (r.ok ? r.json() : { features: [] }))

@@ -88,7 +88,7 @@ const writeFailLimiter = rateLimit({
   max: 10,
   skipSuccessfulRequests: true,
   skip: (req) => ['GET', 'HEAD', 'OPTIONS'].includes(req.method.toUpperCase()),
-  message: { error: 'Слишком много неудачных попыток. Повторите позже.' },
+  message: { error: 'Too many failed attempts. Try again later.' },
 });
 
 // The Telegram webhook is a public POST endpoint (its own secret-token check,
@@ -154,7 +154,7 @@ console.log(
 );
 
 // Feature discovery — present in BOTH builds. The dashboard fetches this to hide
-// UI for features that aren't mounted (e.g. the "Публикация" tab).
+// UI for features that aren't mounted (e.g. the "Publishing" tab).
 app.get('/api/features', (req, res) => {
   res.json({ features: enabledFeatures });
 });

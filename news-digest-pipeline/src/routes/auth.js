@@ -50,7 +50,7 @@ router.get('/login', (req, res) => {
     return res.redirect(safeNext(req.query.next));
   }
   res.setHeader('WWW-Authenticate', `Basic realm="${REALM}"`);
-  return res.status(401).send('Требуется авторизация. Обновите страницу и введите логин/пароль.');
+  return res.status(401).send('Authentication required. Refresh the page and enter your username/password.');
 });
 
 // GET /api/auth/logout — clears the session cookie and returns to the app.

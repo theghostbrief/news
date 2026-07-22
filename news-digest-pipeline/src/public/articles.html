@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>News Digest Dashboard — Статьи</title>
+  <title>News Digest Dashboard — Articles</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -74,7 +74,7 @@
     .auth-bar .btn-logout { background: linear-gradient(135deg, #64748b, #475569); }
     .auth-bar .btn-login:hover, .auth-bar .btn-logout:hover { box-shadow: 0 0 16px rgba(124,58,237,0.3); transform: translateY(-1px); }
 
-    /* Tab bar (shared across Дайджесты / Статьи / Публикация / Настройки) */
+    /* Tab bar (shared across Digests / Articles / Publishing / Settings) */
     .tabs {
       display: flex;
       gap: 2px;
@@ -195,25 +195,25 @@
     <div class="header">
       <h1>News Digest Dashboard</h1>
     </div>
-    <p class="subtitle">Статьи, для которых не удалось автоматически получить текст</p>
+    <p class="subtitle">Articles for which the text could not be fetched automatically</p>
     <nav class="tabs">
-      <a class="tab" href="index.html">Дайджесты</a>
-      <a class="tab active" href="articles.html">Статьи</a>
-      <a class="tab" href="syndication.html">Публикация</a>
-      <a class="tab" href="settings.html">Настройки</a>
-      <a class="tab" href="moderation.html">Модерация</a>
+      <a class="tab" href="index.html">Digests</a>
+      <a class="tab active" href="articles.html">Articles</a>
+      <a class="tab" href="syndication.html">Publishing</a>
+      <a class="tab" href="settings.html">Settings</a>
+      <a class="tab" href="moderation.html">Moderation</a>
     </nav>
     <div class="auth-bar" id="authbar">
-      <span class="auth-ro">👁 Режим просмотра — вы не авторизованы. Можно смотреть, но не менять.</span>
-      <span class="auth-ok">✅ Вы авторизованы — изменения доступны.</span>
-      <a class="btn-login" href="#" id="btn-login">Войти</a>
-      <a class="btn-logout" href="#" id="btn-logout">Выйти</a>
+      <span class="auth-ro">👁 Read-only mode — you are not signed in. You can view, but not change anything.</span>
+      <span class="auth-ok">✅ You are signed in — changes are enabled.</span>
+      <a class="btn-login" href="#" id="btn-login">Sign in</a>
+      <a class="btn-logout" href="#" id="btn-logout">Sign out</a>
     </div>
 
     <div class="stats-row" id="stats"></div>
 
-    <div class="card-list" id="list"><div class="empty">Загрузка...</div></div>
-    <p class="refresh-note">Автообновление каждые 30 сек</p>
+    <div class="card-list" id="list"><div class="empty">Loading...</div></div>
+    <p class="refresh-note">Auto-refresh every 30 sec</p>
   </div>
 
   <script>
@@ -227,11 +227,11 @@
         const s = await res.json();
         const chip = (label, val, warn) => `<div class="stat-chip${warn ? ' warn' : ''}">${label}: <b>${val}</b></div>`;
         document.getElementById('stats').innerHTML =
-          chip('Новые', s.new ?? 0) +
-          chip('В обработке', s.processing ?? 0) +
-          chip('Использованные', s.used ?? 0) +
-          chip('Не удалось получить', s.fetch_failed ?? 0, (s.fetch_failed ?? 0) > 0) +
-          chip('Всего', s.total ?? 0);
+          chip('New', s.new ?? 0) +
+          chip('Processing', s.processing ?? 0) +
+          chip('Used', s.used ?? 0) +
+          chip('Failed to fetch', s.fetch_failed ?? 0, (s.fetch_failed ?? 0) > 0) +
+          chip('Total', s.total ?? 0);
       } catch (err) {
         console.error('Failed to load stats:', err);
       }
@@ -244,22 +244,22 @@
         const articles = await res.json();
 
         if (!Array.isArray(articles) || articles.length === 0) {
-          list.innerHTML = '<div class="empty">Нет статей, требующих ручной вставки текста</div>';
+          list.innerHTML = '<div class="empty">No articles require manual text entry</div>';
           return;
         }
 
         list.innerHTML = articles.map((a) => `
           <div class="card" data-id="${esc(a.id)}">
-            <div class="card-title">${esc(a.title) || '(без заголовка)'}</div>
+            <div class="card-title">${esc(a.title) || '(no title)'}</div>
             <a class="card-url" href="${esc(a.url)}" target="_blank" rel="noopener">${esc(a.url)}</a>
-            ${a.fetch_error ? `<div class="card-error">Ошибка: ${esc(a.fetch_error)}</div>` : ''}
-            <textarea placeholder="Вставьте текст статьи вручную..."></textarea>
-            <button class="btn btn-save" onclick="saveArticle('${esc(a.id)}', this)">Сохранить</button>
+            ${a.fetch_error ? `<div class="card-error">Error: ${esc(a.fetch_error)}</div>` : ''}
+            <textarea placeholder="Paste the article text manually..."></textarea>
+            <button class="btn btn-save" onclick="saveArticle('${esc(a.id)}', this)">Save</button>
           </div>
         `).join('');
       } catch (err) {
         console.error('Failed to load articles:', err);
-        list.innerHTML = '<div class="empty">Ошибка загрузки</div>';
+        list.innerHTML = '<div class="empty">Failed to load</div>';
       }
     }
 
@@ -268,11 +268,11 @@
       const textarea = card.querySelector('textarea');
       const content = textarea.value.trim();
       if (!content) {
-        alert('Вставьте текст статьи перед сохранением');
+        alert('Paste the article text before saving');
         return;
       }
       btn.disabled = true;
-      btn.textContent = 'Сохранение...';
+      btn.textContent = 'Saving...';
       try {
         const res = await fetch(`/api/articles/${id}`, {
           method: 'PATCH',
@@ -283,9 +283,9 @@
         card.remove();
         loadStats();
       } catch (err) {
-        alert('Не удалось сохранить: ' + err.message);
+        alert('Failed to save: ' + err.message);
         btn.disabled = false;
-        btn.textContent = 'Сохранить';
+        btn.textContent = 'Save';
       }
     }
 
