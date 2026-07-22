@@ -157,6 +157,7 @@ router.get('/stats', (req, res) => {
       processing: getArticleCount('processing'),
       used: getArticleCount('used'),
       error: getArticleCount('error'),
+      fetch_failed: getArticleCount('fetch_failed'),
       total: getArticleCount(),
     });
   } catch (err) {

@@ -1,5 +1,5 @@
 import { insertArticle, getArticleCount } from '../db/index.js';
-import { validateArticleUrl } from './url-validator.js';
+import { validateArticleUrl, allowedDomainsForDisplay } from './url-validator.js';
 
 const URL_REGEX = /https?:\/\/[^\s<>"')\]]+/g;
 
@@ -139,7 +139,7 @@ async function handleUrls(botToken, chatId, messageId, text, config) {
 
   const rejected = uniqueUrls.length - validUrls.length;
   if (validUrls.length === 0) {
-    let reply = '⚠️ Не нашел допустимых ссылок (принимаются только perplexity.ai).';
+    let reply = `⚠️ Не нашел допустимых ссылок (принимаются: ${allowedDomainsForDisplay().join(', ')}).`;
     if (rejected > 0) reply += `\nОтклонено: ${rejected}`;
     await sendMessage(botToken, chatId, reply);
     return;

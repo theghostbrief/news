@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterEach } from 'vitest';
 import { validateArticleUrl } from './url-validator.js';
 
 describe('validateArticleUrl — accepts', () => {
@@ -46,6 +46,51 @@ describe('validateArticleUrl — rejects', () => {
   it('over-length URLs', () => {
     const long = 'https://perplexity.ai/' + 'a'.repeat(3000);
     expect(validateArticleUrl(long).ok).toBe(false);
+  });
+});
+
+describe('validateArticleUrl — ALLOWED_ARTICLE_DOMAINS', () => {
+  const ORIGINAL = process.env.ALLOWED_ARTICLE_DOMAINS;
+  afterEach(() => {
+    if (ORIGINAL === undefined) delete process.env.ALLOWED_ARTICLE_DOMAINS;
+    else process.env.ALLOWED_ARTICLE_DOMAINS = ORIGINAL;
+  });
+
+  it('accepts a configured domain and its subdomains by suffix match', () => {
+    process.env.ALLOWED_ARTICLE_DOMAINS = 'understandingwar.org,reuters.com';
+    expect(validateArticleUrl('https://understandingwar.org/x').ok).toBe(true);
+    expect(validateArticleUrl('https://www.understandingwar.org/x').ok).toBe(true);
+    expect(validateArticleUrl('https://www.reuters.com/x').ok).toBe(true);
+  });
+
+  it('still rejects domains not on the configured list', () => {
+    process.env.ALLOWED_ARTICLE_DOMAINS = 'understandingwar.org';
+    expect(validateArticleUrl('https://evil.com/x').ok).toBe(false);
+    expect(validateArticleUrl('https://reuters.com/x').ok).toBe(false);
+  });
+
+  it('still allows perplexity.ai (apex + www only) regardless of the env list', () => {
+    process.env.ALLOWED_ARTICLE_DOMAINS = 'understandingwar.org';
+    expect(validateArticleUrl('https://perplexity.ai/x').ok).toBe(true);
+    expect(validateArticleUrl('https://www.perplexity.ai/x').ok).toBe(true);
+  });
+
+  it('never loosens perplexity.ai to arbitrary subdomains even if listed in env', () => {
+    process.env.ALLOWED_ARTICLE_DOMAINS = 'perplexity.ai,understandingwar.org';
+    expect(validateArticleUrl('https://evil.perplexity.ai/x').ok).toBe(false);
+  });
+
+  it('falls back to perplexity.ai only when the env var is unset/blank', () => {
+    delete process.env.ALLOWED_ARTICLE_DOMAINS;
+    expect(validateArticleUrl('https://understandingwar.org/x').ok).toBe(false);
+    process.env.ALLOWED_ARTICLE_DOMAINS = '   ';
+    expect(validateArticleUrl('https://understandingwar.org/x').ok).toBe(false);
+  });
+
+  it('rejects look-alike hosts for a configured domain too', () => {
+    process.env.ALLOWED_ARTICLE_DOMAINS = 'reuters.com';
+    expect(validateArticleUrl('https://reuters.com.evil.com/x').ok).toBe(false);
+    expect(validateArticleUrl('https://notreuters.com/x').ok).toBe(false);
   });
 });
 

@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>News Digest Dashboard — Статьи</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f5f3ef;
+      color: #2d2a26;
+      padding: 24px;
+      min-height: 100vh;
+      font-size: 15px;
+    }
+
+    .container { max-width: 1200px; margin: 0 auto; }
+
+    .header {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      margin-bottom: 6px;
+    }
+    h1 {
+      font-size: 32px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+      color: #2d2a26;
+    }
+    .subtitle {
+      color: #8a8580;
+      font-size: 15px;
+      margin-bottom: 20px;
+    }
+
+    .auth-bar {
+      display: none;
+      align-items: center;
+      gap: 12px;
+      background: rgba(245,158,11,0.08);
+      border: 1px solid rgba(245,158,11,0.28);
+      color: #b45309;
+      border-radius: 10px;
+      padding: 10px 16px;
+      margin-bottom: 16px;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+    body.readonly .auth-bar, body.authed .auth-bar { display: flex; }
+    .auth-ok, .auth-bar .btn-logout { display: none; }
+    body.authed .auth-bar {
+      background: rgba(16,185,129,0.10);
+      border-color: rgba(16,185,129,0.30);
+      color: #047857;
+    }
+    body.authed .auth-ro, body.authed .btn-login { display: none; }
+    body.authed .auth-ok { display: inline; }
+    body.authed .auth-bar .btn-logout { display: inline-block; }
+    .auth-bar .btn-login, .auth-bar .btn-logout {
+      margin-left: auto;
+      background: linear-gradient(135deg, #7c3aed, #3b82f6);
+      color: #fff; border: none; border-radius: 8px;
+      padding: 6px 16px; font-size: 14px; font-weight: 600;
+      font-family: 'Inter', sans-serif; cursor: pointer;
+      transition: all 0.2s ease; text-decoration: none;
+      white-space: nowrap; flex-shrink: 0;
+    }
+    .auth-bar .btn-logout { background: linear-gradient(135deg, #64748b, #475569); }
+    .auth-bar .btn-login:hover, .auth-bar .btn-logout:hover { box-shadow: 0 0 16px rgba(124,58,237,0.3); transform: translateY(-1px); }
+
+    /* Tab bar (shared across Дайджесты / Статьи / Публикация / Настройки) */
+    .tabs {
+      display: flex;
+      gap: 2px;
+      margin: 4px 0 22px;
+      border-bottom: 1px solid #e8e4df;
+      flex-wrap: wrap;
+    }
+    .tabs .tab {
+      padding: 9px 18px;
+      font-size: 15px;
+      font-weight: 500;
+      color: #8a8580;
+      text-decoration: none;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -1px;
+      transition: color .2s ease, border-color .2s ease;
+      white-space: nowrap;
+    }
+    .tabs .tab:hover { color: #2d2a26; }
+    .tabs .tab.active {
+      color: #7c3aed;
+      border-bottom-color: #7c3aed;
+      font-weight: 600;
+    }
+
+    /* Stats row */
+    .stats-row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 20px;
+    }
+    .stat-chip {
+      background: #ffffff;
+      border: 1px solid #e8e4df;
+      border-radius: 10px;
+      padding: 8px 14px;
+      font-size: 13px;
+      color: #8a8580;
+    }
+    .stat-chip b { color: #2d2a26; font-variant-numeric: tabular-nums; }
+    .stat-chip.warn b { color: #d97706; }
+
+    /* Article cards */
+    .card-list { display: flex; flex-direction: column; gap: 12px; }
+    .card {
+      background: #ffffff;
+      border: 1px solid #e8e4df;
+      border-radius: 10px;
+      padding: 16px;
+    }
+    .card-title {
+      font-weight: 600;
+      color: #2d2a26;
+      margin-bottom: 4px;
+    }
+    .card-url {
+      font-size: 13px;
+      color: #7c3aed;
+      word-break: break-all;
+      margin-bottom: 8px;
+      display: inline-block;
+    }
+    .card-error {
+      font-size: 13px;
+      color: #b45309;
+      background: rgba(245,158,11,0.08);
+      border: 1px solid rgba(245,158,11,0.2);
+      border-radius: 8px;
+      padding: 6px 10px;
+      margin-bottom: 10px;
+    }
+    .card textarea {
+      width: 100%;
+      min-height: 140px;
+      resize: vertical;
+      font-family: 'Inter', sans-serif;
+      font-size: 14px;
+      color: #2d2a26;
+      background: #faf9f7;
+      border: 1px solid #ddd8d0;
+      border-radius: 8px;
+      padding: 10px 12px;
+      margin-bottom: 10px;
+    }
+    .card textarea:focus { outline: none; border-color: #7c3aed; box-shadow: 0 0 0 2px rgba(124,58,237,0.15); }
+    body.readonly .card textarea, body.readonly .card .btn-save { display: none; }
+
+    .btn {
+      border: none;
+      padding: 6px 14px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+      font-family: 'Inter', sans-serif;
+      transition: all 0.2s ease;
+    }
+    .btn-save {
+      background: linear-gradient(135deg, #7c3aed, #3b82f6);
+      color: #fff;
+    }
+    .btn-save:hover { box-shadow: 0 0 16px rgba(124,58,237,0.3); transform: translateY(-1px); }
+    .btn-save:disabled { opacity: 0.6; cursor: default; transform: none; box-shadow: none; }
+
+    .empty { text-align: center; padding: 48px; color: #b0aaa4; font-size: 14px; }
+    .refresh-note {
+      text-align: right;
+      font-size: 12px;
+      color: #b0aaa4;
+      margin-top: 14px;
+      letter-spacing: 0.2px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>News Digest Dashboard</h1>
+    </div>
+    <p class="subtitle">Статьи, для которых не удалось автоматически получить текст</p>
+    <nav class="tabs">
+      <a class="tab" href="index.html">Дайджесты</a>
+      <a class="tab active" href="articles.html">Статьи</a>
+      <a class="tab" href="syndication.html">Публикация</a>
+      <a class="tab" href="settings.html">Настройки</a>
+      <a class="tab" href="moderation.html">Модерация</a>
+    </nav>
+    <div class="auth-bar" id="authbar">
+      <span class="auth-ro">👁 Режим просмотра — вы не авторизованы. Можно смотреть, но не менять.</span>
+      <span class="auth-ok">✅ Вы авторизованы — изменения доступны.</span>
+      <a class="btn-login" href="#" id="btn-login">Войти</a>
+      <a class="btn-logout" href="#" id="btn-logout">Выйти</a>
+    </div>
+
+    <div class="stats-row" id="stats"></div>
+
+    <div class="card-list" id="list"><div class="empty">Загрузка...</div></div>
+    <p class="refresh-note">Автообновление каждые 30 сек</p>
+  </div>
+
+  <script>
+    function esc(s) {
+      return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    }
+
+    async function loadStats() {
+      try {
+        const res = await fetch('/api/articles/stats');
+        const s = await res.json();
+        const chip = (label, val, warn) => `<div class="stat-chip${warn ? ' warn' : ''}">${label}: <b>${val}</b></div>`;
+        document.getElementById('stats').innerHTML =
+          chip('Новые', s.new ?? 0) +
+          chip('В обработке', s.processing ?? 0) +
+          chip('Использованные', s.used ?? 0) +
+          chip('Не удалось получить', s.fetch_failed ?? 0, (s.fetch_failed ?? 0) > 0) +
+          chip('Всего', s.total ?? 0);
+      } catch (err) {
+        console.error('Failed to load stats:', err);
+      }
+    }
+
+    async function loadFailed() {
+      const list = document.getElementById('list');
+      try {
+        const res = await fetch('/api/articles?status=fetch_failed&limit=100');
+        const articles = await res.json();
+
+        if (!Array.isArray(articles) || articles.length === 0) {
+          list.innerHTML = '<div class="empty">Нет статей, требующих ручной вставки текста</div>';
+          return;
+        }
+
+        list.innerHTML = articles.map((a) => `
+          <div class="card" data-id="${esc(a.id)}">
+            <div class="card-title">${esc(a.title) || '(без заголовка)'}</div>
+            <a class="card-url" href="${esc(a.url)}" target="_blank" rel="noopener">${esc(a.url)}</a>
+            ${a.fetch_error ? `<div class="card-error">Ошибка: ${esc(a.fetch_error)}</div>` : ''}
+            <textarea placeholder="Вставьте текст статьи вручную..."></textarea>
+            <button class="btn btn-save" onclick="saveArticle('${esc(a.id)}', this)">Сохранить</button>
+          </div>
+        `).join('');
+      } catch (err) {
+        console.error('Failed to load articles:', err);
+        list.innerHTML = '<div class="empty">Ошибка загрузки</div>';
+      }
+    }
+
+    async function saveArticle(id, btn) {
+      const card = btn.closest('.card');
+      const textarea = card.querySelector('textarea');
+      const content = textarea.value.trim();
+      if (!content) {
+        alert('Вставьте текст статьи перед сохранением');
+        return;
+      }
+      btn.disabled = true;
+      btn.textContent = 'Сохранение...';
+      try {
+        const res = await fetch(`/api/articles/${id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content }),
+        });
+        if (!res.ok) throw new Error('Server error');
+        card.remove();
+        loadStats();
+      } catch (err) {
+        alert('Не удалось сохранить: ' + err.message);
+        btn.disabled = false;
+        btn.textContent = 'Сохранить';
+      }
+    }
+
+    let READONLY = false;
+    async function loadAuth() {
+      let required = false, authed = false;
+      try {
+        const res = await fetch('/api/auth/status');
+        const a = await res.json();
+        required = !!a.required;
+        authed = !!a.authenticated;
+        READONLY = !!(a.required && !a.authenticated);
+      } catch (err) {
+        READONLY = false;
+      }
+      document.body.classList.toggle('readonly', READONLY);
+      document.body.classList.toggle('authed', required && authed);
+    }
+
+    document.getElementById('btn-login').addEventListener('click', (e) => {
+      e.preventDefault();
+      window.location.href = '/api/auth/login?next=' + encodeURIComponent(location.pathname);
+    });
+    document.getElementById('btn-logout').addEventListener('click', (e) => {
+      e.preventDefault();
+      window.location.href = '/api/auth/logout?next=' + encodeURIComponent(location.pathname);
+    });
+
+    fetch('/api/features')
+      .then((r) => (r.ok ? r.json() : { features: [] }))
+      .then((d) => {
+        const feats = (d && Array.isArray(d.features)) ? d.features : [];
+        if (!feats.includes('syndication')) {
+          const tab = document.querySelector('.tabs a.tab[href="syndication.html"]');
+          if (tab) tab.style.display = 'none';
+        }
+        if (!feats.includes('moderation')) {
+          const modTab = document.querySelector('.tabs a.tab[href="moderation.html"]');
+          if (modTab) modTab.style.display = 'none';
+        }
+      })
+      .catch(() => {});
+
+    loadAuth().finally(() => {
+      loadStats();
+      loadFailed();
+      setInterval(() => { loadStats(); loadFailed(); }, 30000);
+    });
+  </script>
+</body>
+</html>

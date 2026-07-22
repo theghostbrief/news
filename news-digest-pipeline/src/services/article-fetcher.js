@@ -1,6 +1,5 @@
 import * as cheerio from 'cheerio';
-
-const USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
+import { safeFetch } from './safe-fetch.js';
 
 const CONTENT_SELECTORS = [
   'article',
@@ -17,20 +16,9 @@ const REMOVE_SELECTORS = 'script, style, nav, header, footer, [class*="sideBarWi
  * Returns { title, content } or throws on failure.
  */
 async function fetchWithCheerio(url) {
-  const response = await fetch(url, {
-    headers: {
-      'User-Agent': USER_AGENT,
-      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-      'Accept-Language': 'en-US,en;q=0.9,ru;q=0.8',
-    },
-    redirect: 'follow',
-    signal: AbortSignal.timeout(15000),
-  });
-
-  if (!response.ok) {
-    throw new Error(`HTTP ${response.status} fetching ${url}`);
-  }
-
+  // safeFetch enforces the perplexity.ai allowlist on every redirect hop, a
+  // private-IP DNS check, and a response-size cap — see safe-fetch.js.
+  const response = await safeFetch(url, { timeoutMs: 15000 });
   const html = await response.text();
   return extractFromHtml(html);
 }
@@ -38,7 +26,7 @@ async function fetchWithCheerio(url) {
 /**
  * Extract title and content from raw HTML using cheerio.
  */
-function extractFromHtml(html) {
+export function extractFromHtml(html) {
   const $ = cheerio.load(html);
 
   // Remove unwanted elements

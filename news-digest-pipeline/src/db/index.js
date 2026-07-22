@@ -90,6 +90,28 @@ export function updateArticleStatus(id, status) {
   ).run(status, id);
 }
 
+// Articles saved without content (e.g. via Telegram) that the background
+// content-fetcher hasn't picked up yet. Deliberately excludes 'fetch_failed'
+// rows — those already had a fetch attempt and are waiting on a manual paste
+// via the dashboard, not another automatic retry.
+export function getArticlesNeedingFetch(limit = 5) {
+  return db.prepare(
+    `SELECT * FROM articles WHERE status = 'new' AND (content IS NULL OR content = '') ORDER BY created_at ASC LIMIT ?`
+  ).all(limit);
+}
+
+export function markArticleFetched(id, { title, content }) {
+  db.prepare(
+    `UPDATE articles SET title = ?, content = ?, fetch_error = NULL, status = 'new', updated_at = datetime('now') WHERE id = ?`
+  ).run(title || null, content, id);
+}
+
+export function markArticleFetchFailed(id, errorMessage) {
+  db.prepare(
+    `UPDATE articles SET status = 'fetch_failed', fetch_error = ?, updated_at = datetime('now') WHERE id = ?`
+  ).run(errorMessage, id);
+}
+
 export function updateArticleCommentary(id, commentary) {
   db.prepare(
     `UPDATE articles SET commentary = ?, updated_at = datetime('now') WHERE id = ?`

@@ -122,6 +122,16 @@ function buildConfig() {
     checkIntervalMs: parseInt(process.env.CHECK_INTERVAL_MS || '60000', 10),
     nodeEnv: process.env.NODE_ENV || 'development',
 
+    // Server-side content fetcher: backfills articles saved without content
+    // (e.g. via Telegram) since the local Mac fetcher is optional/Mac-only.
+    contentFetchIntervalMs: parseInt(process.env.CONTENT_FETCH_INTERVAL_MS || '120000', 10),
+    contentFetchBatchSize: parseInt(process.env.CONTENT_FETCH_BATCH_SIZE || '5', 10),
+    contentFetchDomainDelayMs: parseInt(process.env.CONTENT_FETCH_DOMAIN_DELAY_MS || '3000', 10),
+    // Opt-in fallback for KNOWN_BLOCKED_DOMAINS (content-fetcher.js): proxies
+    // the fetch through https://r.jina.ai/, a third-party service. Off by
+    // default since it means sending article URLs to that service.
+    jinaReaderFallback: (process.env.JINA_READER_FALLBACK || 'false') === 'true',
+
     // Active commentary scenario for Phase A: 'sarcastic' (prompt.md) or
     // 'architect' (prompt_deep.md). Assembly (Phase B) is scenario-independent.
     activeScenario: process.env.ACTIVE_SCENARIO || 'sarcastic',
