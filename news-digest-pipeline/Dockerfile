@@ -6,9 +6,16 @@ WORKDIR /app
 # server, so the headless browser was ~400MB of dead weight. Keep only:
 #   - wget: used by the docker-compose healthcheck
 #   - ca-certificates: outbound HTTPS to the Anthropic API
+#   - python3/make/g++: better-sqlite3 falls back to a source build via
+#     node-gyp when npm's registry has no prebuilt binary for the exact
+#     Node patch version baked into this image; without these the install
+#     fails outright instead of just being slower.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     wget \
     ca-certificates \
+    python3 \
+    make \
+    g++ \
     && rm -rf /var/lib/apt/lists/*
 
 COPY package*.json ./
