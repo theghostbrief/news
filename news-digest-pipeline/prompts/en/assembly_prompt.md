@@ -35,9 +35,10 @@ commentary text.
    line.
 
 3. After the last item's `<!--/SEG-->`, a blank line, then exactly one closing
-   line starting with `Ghost's read:` — a single dry sentence naming the pattern
-   across today's items (not a recap of any one item, not a list). One sentence.
-   No more.
+   line starting with `Ghost's read:` — a single plain, analytical sentence
+   naming the pattern across today's items (not a recap of any one item, not a
+   list). Same calm, near-neutral register as the rest of the digest — no irony,
+   no wit. One sentence. No more.
 
 4. A blank line, then exactly one line:
 
@@ -54,6 +55,15 @@ commentary text.
    add or remove hashtags, do not insert spaces inside a hashtag, do not add any
    introductory words before it (no "Hashtags:", no "Tags:" — output only the
    hashtags themselves, exactly as given, and nothing else on that line).
+
+## American English only (mandatory)
+
+Any text you author yourself — headlines, the `Ghost's read:` line — must be in
+American English exclusively (e.g. defense, program, center, analyze,
+organization, judgment, gray, tire), even if the source commentary text you are
+copying verbatim uses a British spelling. Convert British spelling to American in
+anything you write; never alter the copied commentary text itself, which is
+reproduced byte-for-byte regardless of its spelling.
 
 ## Absolute rules
 

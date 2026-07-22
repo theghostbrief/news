@@ -167,9 +167,10 @@ function buildConfig() {
     // default since it means sending article URLs to that service.
     jinaReaderFallback: (process.env.JINA_READER_FALLBACK || 'false') === 'true',
 
-    // Active commentary scenario for Phase A: 'sarcastic' (prompt.md) or
-    // 'architect' (prompt_deep.md). Assembly (Phase B) is scenario-independent.
-    activeScenario: process.env.ACTIVE_SCENARIO || 'sarcastic',
+    // Active scenario: 'ghost' (English, production default), 'sarcastic', or
+    // 'architect' (Krol's Russian scenarios, kept as reference/fallback). Each
+    // scenario picks its own Phase A + Phase B prompts — see digest-generator.js.
+    activeScenario: process.env.ACTIVE_SCENARIO || 'ghost',
 
     // Publishers
     facebookPageId: process.env.FACEBOOK_PAGE_ID || '',

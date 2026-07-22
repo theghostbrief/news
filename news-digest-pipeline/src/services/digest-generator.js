@@ -33,7 +33,7 @@ export async function generateDigest(db, articles, config) {
   // edition and also switches Phase B (assembly prompt + wrapper + completion
   // marker, all handled below) — 'sarcastic'/'architect' share Krol's
   // Russian assembly path exactly as before.
-  const scenario = config.activeScenario || 'sarcastic';
+  const scenario = config.activeScenario || 'ghost';
   const isGhost = scenario === 'ghost';
   let commentarySystem;
   if (isGhost) {

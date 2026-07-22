@@ -118,7 +118,7 @@ function buildSettingsPayload() {
     ghost: { text: config.ghostCommentaryPrompt, editable: true },
     ghostAssembly: { text: config.ghostAssemblyPrompt, editable: true },
     scenarios: {
-      active: config.activeScenario || 'sarcastic',
+      active: config.activeScenario || 'ghost',
       options: SCENARIO_OPTIONS,
     },
     content: {
