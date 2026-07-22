@@ -1,53 +1,53 @@
-# Facebook Page API — Быстрая настройка публикации
+# Facebook Page API — Quick Publishing Setup
 
-> Краткий справочник по настройке публикации на Facebook **Страницу** (Page) через Graph API.
-> Полная история исследования (включая попытки автоматизации профиля) — в `facebook-setup.md`.
+> Quick reference for setting up publishing to a Facebook **Page** via the Graph API.
+> Full research history (including profile-automation attempts) — see `facebook-setup.md`.
 
 ---
 
-## 1. Создание приложения Meta
+## 1. Create a Meta app
 
-1. Перейти на [developers.facebook.com](https://developers.facebook.com/) → **Create App**
+1. Go to [developers.facebook.com](https://developers.facebook.com/) → **Create App**
 2. Use case: **Content management** → "Manage everything on your Page"
-3. Указать имя приложения, email
+3. Enter an app name and email
 
-**ВАЖНО про Business Portfolio:**
-- Если при создании привязать приложение к Business Portfolio, то в Graph API Explorer будут видны **только страницы из этого портфолио**
-- Если нужны личные страницы (не входящие в портфолио) — выбрать **"I don't want to connect a business portfolio yet"**
-- Это можно изменить позже, но проще сразу выбрать правильно
+**IMPORTANT about Business Portfolio:**
+- If you link the app to a Business Portfolio at creation, Graph API Explorer will only show **pages that belong to that portfolio**
+- If you need personal pages (not part of a portfolio) — choose **"I don't want to connect a business portfolio yet"**
+- This can be changed later, but it's simpler to choose correctly up front
 
 ---
 
-## 2. Получение Page Access Token
+## 2. Getting a Page Access Token
 
-### Способ A: Graph API Explorer (простой)
+### Method A: Graph API Explorer (simple)
 
-1. Перейти в **Tools → Graph API Explorer**
-2. Выбрать своё приложение
-3. Нажать **"Get Token"** → **"Get Page Access Token"**
-4. Выдать permissions: `pages_manage_posts`, `pages_read_engagement`, `pages_show_list`
-5. Выбрать нужную страницу
-6. Explorer покажет Page Access Token
+1. Go to **Tools → Graph API Explorer**
+2. Select your app
+3. Click **"Get Token"** → **"Get Page Access Token"**
+4. Grant permissions: `pages_manage_posts`, `pages_read_engagement`, `pages_show_list`
+5. Select the page you want
+6. Explorer will show the Page Access Token
 
-### Способ B: Прямой OAuth URL (если Explorer не показывает нужную страницу)
+### Method B: Direct OAuth URL (if Explorer doesn't show the page you need)
 
-Бывает, что Graph API Explorer не отображает нужную страницу (особенно если она не в Business Portfolio). В этом случае — прямой OAuth:
+Sometimes Graph API Explorer won't show the page you need (especially if it isn't in a Business Portfolio). In that case, use a direct OAuth flow:
 
 ```
 https://www.facebook.com/v23.0/dialog/oauth?client_id=APP_ID&redirect_uri=https://localhost/&scope=pages_manage_posts,pages_read_engagement,pages_show_list&response_type=token
 ```
 
-Заменить `APP_ID` на ID приложения. После авторизации браузер редиректит на `https://localhost/#access_token=...` — скопировать User Token из URL.
+Replace `APP_ID` with your app's ID. After authorizing, the browser redirects to `https://localhost/#access_token=...` — copy the User Token from the URL.
 
-### Получение Page Token из User Token
+### Getting a Page Token from the User Token
 
-User Token != Page Token. Нужно обменять:
+A User Token is not a Page Token. You need to exchange it:
 
 ```bash
 curl "https://graph.facebook.com/v23.0/me/accounts?access_token=USER_TOKEN"
 ```
 
-Ответ содержит список страниц с `access_token` и `id` для каждой:
+The response contains a list of pages, each with an `access_token` and `id`:
 
 ```json
 {
@@ -55,7 +55,7 @@ curl "https://graph.facebook.com/v23.0/me/accounts?access_token=USER_TOKEN"
     {
       "access_token": "PAGE_ACCESS_TOKEN_HERE",
       "id": "YOUR_FACEBOOK_PAGE_ID",
-      "name": "Alex Krol"
+      "name": "The Ghost Brief"
     }
   ]
 }
@@ -63,40 +63,40 @@ curl "https://graph.facebook.com/v23.0/me/accounts?access_token=USER_TOKEN"
 
 ### Page ID
 
-| Страница | Page ID |
-|----------|---------|
-| Alex Krol | `YOUR_FACEBOOK_PAGE_ID` |
-| Квест Теории Каст и Ролей (тестовая) | `YOUR_TEST_PAGE_ID` |
+Record your page's numeric ID here once you have it (from the response above):
+
+| Page | Page ID |
+|------|---------|
+| The Ghost Brief (facebook.com/theghostbrief) | *(fill in after Method A/B above)* |
 
 ---
 
-## 3. Публикация через API
+## 3. Publishing via the API
 
 ```bash
 curl -X POST "https://graph.facebook.com/v19.0/{PAGE_ID}/feed" \
-  -d "message=Текст поста" \
+  -d "message=Post text" \
   -d "access_token=PAGE_ACCESS_TOKEN"
 ```
 
-Ответ:
+Response:
 
 ```json
 {
   "id": "YOUR_FACEBOOK_PAGE_ID_123456789"
 }
-
 ```
 
 ---
 
-## 4. Время жизни токена
+## 4. Token lifetime
 
-| Тип | Срок жизни |
-|-----|-----------|
-| Short-lived token | ~1-2 часа |
-| Long-lived token | ~60 дней |
+| Type | Lifetime |
+|------|----------|
+| Short-lived token | ~1-2 hours |
+| Long-lived token | ~60 days |
 
-### Обмен short-lived → long-lived
+### Exchanging short-lived → long-lived
 
 ```bash
 curl "https://graph.facebook.com/v23.0/oauth/access_token?\
@@ -106,38 +106,38 @@ client_secret=APP_SECRET&\
 fb_exchange_token=SHORT_LIVED_TOKEN"
 ```
 
-**ВАЖНО:** Long-lived токен живёт ~60 дней. Нужно обновлять до истечения срока, иначе публикация перестанет работать.
+**IMPORTANT:** A long-lived token lasts ~60 days. It must be refreshed before it expires, or publishing will stop working.
 
 ---
 
-## 5. Переменные окружения
+## 5. Environment variables
 
-В `.env` файле (или на VPS):
+In the `.env` file (or on the VPS):
 
 ```env
 FACEBOOK_PAGE_ID=YOUR_FACEBOOK_PAGE_ID
 FACEBOOK_PAGE_ACCESS_TOKEN=EAAxxxxxx...
 ```
 
-- `FACEBOOK_PAGE_ID` — ID страницы (не профиля!)
-- `FACEBOOK_PAGE_ACCESS_TOKEN` — именно Page Access Token, **не** User Token
+- `FACEBOOK_PAGE_ID` — the page's ID (not a personal profile!)
+- `FACEBOOK_PAGE_ACCESS_TOKEN` — specifically a Page Access Token, **not** a User Token
 
 ---
 
-## 6. Проверка
+## 6. Verification
 
-### Проверить, что токен валиден и принадлежит странице
+### Confirm the token is valid and belongs to the page
 
 ```bash
 curl "https://graph.facebook.com/v23.0/me?fields=id,name&access_token=TOKEN"
 ```
 
-Должен вернуть имя **страницы** (например, "Alex Krol"), а не имя пользователя.
+Should return the **page's** name (e.g. "The Ghost Brief"), not a personal user's name.
 
-### Проверить доступ к ленте страницы
+### Confirm access to the page's feed
 
 ```bash
 curl "https://graph.facebook.com/v23.0/PAGE_ID/feed?access_token=TOKEN"
 ```
 
-Должен вернуть список последних постов на странице.
+Should return a list of the page's recent posts.

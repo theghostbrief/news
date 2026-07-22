@@ -708,12 +708,13 @@
         if (!res.ok) throw new Error(data.error || 'Server error');
 
         const result = data.published?.[platform];
-        if (result) {
+        if (result?.postId || result?.messageId) {
           btn.className = 'plat-btn sent';
           btn.textContent = '✓ ' + (platform === 'telegram' ? 'TG' : 'FB');
           btn.onclick = null;
         } else {
-          alert(names[platform] + ': publish failed. Check the token.');
+          const detail = result?.error || 'Check the token.';
+          alert(names[platform] + ' publish failed: ' + detail);
           btn.disabled = false;
           btn.textContent = (platform === 'telegram' ? '📨 TG' : '📘 FB');
         }

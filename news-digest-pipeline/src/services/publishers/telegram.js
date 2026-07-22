@@ -3,6 +3,7 @@
  * Sends content to a Telegram chat/channel via Bot API.
  * Splits long messages at item boundaries (max 4096 chars per message).
  */
+import { stripDigestMarkers } from '../digest-format.js';
 
 const TG_MAX_LENGTH = 4096;
 const INTER_MESSAGE_DELAY = 1000;
@@ -53,51 +54,71 @@ function splitMessage(text) {
   return chunks;
 }
 
+// Returns { messageId } on success, { error } on failure — never throws a raw
+// JSON.parse error up to the caller (same class of bug as the Facebook
+// publisher's "Unexpected non-whitespace character after JSON", 2026-07-22:
+// a non-JSON response body must produce a readable error, not an exception).
 async function sendOne(botToken, chatId, text) {
   const url = `https://api.telegram.org/bot${botToken}/sendMessage`;
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      chat_id: chatId,
-      text,
-      disable_web_page_preview: true,
-    }),
-  });
 
-  const data = await response.json();
+  let response;
+  try {
+    response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: chatId,
+        text,
+        disable_web_page_preview: true,
+      }),
+    });
+  } catch (err) {
+    console.error('[telegram] Network error:', err.message);
+    return { error: `Network error contacting Telegram: ${err.message}` };
+  }
+
+  const raw = await response.text();
+  let data;
+  try {
+    data = JSON.parse(raw);
+  } catch {
+    console.error('[telegram] Non-JSON response:', raw.slice(0, 500));
+    return { error: 'Telegram returned an unreadable response — the bot token is likely missing or invalid.' };
+  }
 
   if (!data.ok) {
     console.error('[telegram] API error:', data.description || JSON.stringify(data));
-    return null;
+    return { error: `Telegram API error: ${data.description || 'unknown error'}` };
   }
 
-  return data.result.message_id;
+  return { messageId: data.result.message_id };
 }
 
 export async function publishToTelegram(botToken, chatId, content) {
   if (!botToken || !chatId) {
     console.error('[telegram] Missing botToken or chatId');
-    return null;
+    return { error: 'Telegram bot token or chat ID is not configured (TELEGRAM_BOT_TOKEN / TELEGRAM_PUBLISH_CHAT_ID in .env).' };
   }
 
   try {
-    const chunks = splitMessage(content);
+    const clean = stripDigestMarkers(content);
+    const chunks = splitMessage(clean);
     console.log(`[telegram] Sending ${chunks.length} message(s) to ${chatId}`);
 
     const messageIds = [];
 
     for (let i = 0; i < chunks.length; i++) {
-      const msgId = await sendOne(botToken, chatId, chunks[i]);
-      if (msgId) messageIds.push(msgId);
+      const result = await sendOne(botToken, chatId, chunks[i]);
+      if (result.error) return { error: result.error };
+      messageIds.push(result.messageId);
       if (i < chunks.length - 1) await sleep(INTER_MESSAGE_DELAY);
     }
 
-    if (messageIds.length === 0) return null;
+    if (messageIds.length === 0) return { error: 'No messages were sent.' };
 
     return { messageId: messageIds[0], totalMessages: messageIds.length };
   } catch (err) {
     console.error('[telegram] Error publishing:', err.message);
-    return null;
+    return { error: err.message };
   }
 }

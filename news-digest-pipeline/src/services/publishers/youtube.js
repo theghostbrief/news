@@ -7,6 +7,10 @@
  * Alternative: use Puppeteer/Playwright to automate the browser flow.
  */
 export async function publishToYouTube(accessToken, channelId, content) {
+  // NOTE for whoever implements this: strip markers before sending, same as
+  // the Telegram/Facebook publishers — see stripDigestMarkers() in
+  // ../digest-format.js. Not applied here since this placeholder never
+  // actually sends `content` anywhere yet.
   console.warn(
     '[youtube] Community Posts API is not available. ' +
     'YouTube publishing is a placeholder — no post was created.'
