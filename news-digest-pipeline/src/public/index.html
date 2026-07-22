@@ -711,6 +711,18 @@
       }
     }
 
+    // Preview-only cleanup: the stored digest text keeps its <!--SEG--> /
+    // <!--TOP3--> machine-readable markers (for the future segmenter — see
+    // media-pipeline-spec.md §5.1) untouched. This just hides them from the
+    // human-facing preview; copy/publish/API responses are unaffected.
+    function stripDigestMarkers(text) {
+      return text
+        .replace(/<!--SEG.*?-->\n?/g, '')
+        .replace(/<!--\/SEG-->\n?/g, '')
+        .replace(/<!--TOP3.*?-->\n?/g, '')
+        .replace(/\n{3,}/g, '\n\n');
+    }
+
     async function previewDigest(id) {
       const modal = document.getElementById('modal');
       const body = document.getElementById('modal-body');
@@ -722,7 +734,7 @@
       try {
         const res = await fetch(`/api/digests/${id}/text`);
         const text = await res.text();
-        body.textContent = text;
+        body.textContent = stripDigestMarkers(text);
       } catch (err) {
         body.textContent = 'Failed to load: ' + err.message;
       }
