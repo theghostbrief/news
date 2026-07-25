@@ -39,6 +39,20 @@ CREATE TABLE IF NOT EXISTS digests (
   updated_at TEXT DEFAULT (datetime('now'))
 );
 
+-- Singleton row tracking the interactive "compile digest?" Telegram prompt.
+-- pending: an unanswered prompt is currently outstanding (queue-manager must
+--   not send another one until it's resolved via Compile or Keep adding).
+-- baseline: the ready-article count as of the last prompt send (or the last
+--   successful compile) — the next prompt fires once ready count - baseline
+--   reaches 10, so batches are counted from "since last asked", not total.
+CREATE TABLE IF NOT EXISTS digest_prompt_state (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  pending INTEGER NOT NULL DEFAULT 0,
+  baseline INTEGER NOT NULL DEFAULT 0,
+  updated_at TEXT DEFAULT (datetime('now'))
+);
+INSERT OR IGNORE INTO digest_prompt_state (id, pending, baseline) VALUES (1, 0, 0);
+
 -- NOTE: source_posts (the FB-Syndication contract table) is intentionally NOT
 -- defined here. It belongs to the optional pro cluster, which creates it
 -- idempotently at startup (src/pro/db/source-posts.js migrateSourcePosts()).

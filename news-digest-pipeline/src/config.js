@@ -152,7 +152,9 @@ function buildConfig() {
     geminiApiKey: process.env.GEMINI_API_KEY || '', // secret (planned integrations)
     dbPath: process.env.DB_PATH || './data/news-digest.db',
     ntfyTopic: process.env.NTFY_TOPIC || '',
-    articleThreshold: parseInt(process.env.ARTICLE_THRESHOLD || '13', 10),
+    // Ready-article batch size for the interactive Telegram compile prompt
+    // (queue-manager.js) — fires every ARTICLE_THRESHOLD ready articles.
+    articleThreshold: parseInt(process.env.ARTICLE_THRESHOLD || '10', 10),
     maxArticlesPerDigest: parseInt(process.env.MAX_ARTICLES_PER_DIGEST || '17', 10),
     checkIntervalMs: parseInt(process.env.CHECK_INTERVAL_MS || '60000', 10),
     nodeEnv: process.env.NODE_ENV || 'development',

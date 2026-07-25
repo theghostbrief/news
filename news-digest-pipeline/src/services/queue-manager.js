@@ -1,11 +1,9 @@
-import { getArticleCount, getNewArticles } from '../db/index.js';
-import { generateDigest } from './digest-generator.js';
-import { notifyDigestReady } from './notifier.js';
-import { getDb } from '../db/index.js';
+import { getReadyArticleCount, getDigestPromptState, setDigestPromptState } from '../db/index.js';
+import { sendCompilePrompt } from './telegram-bot.js';
 
 let running = false;
 
-async function processQueue(config) {
+export async function processQueue(config) {
   if (running) {
     return;
   }
@@ -13,36 +11,34 @@ async function processQueue(config) {
   running = true;
 
   try {
-    const newCount = getArticleCount('new');
-
-    if (newCount < config.articleThreshold) {
+    if (!config.telegramBotToken || !config.telegramChatId) {
+      // Nothing to prompt into — no auto-generation fallback by design (that's
+      // exactly the race this replaced).
       return;
     }
 
-    const limit = Math.min(newCount, config.maxArticlesPerDigest);
-    const articles = getNewArticles(limit);
+    const state = getDigestPromptState();
+    if (state.pending) {
+      // Already have an outstanding prompt awaiting a decision — don't re-send.
+      return;
+    }
 
-    console.log(`[queue-manager] Processing ${articles.length} articles into digest`);
-
-    const db = getDb();
-    const digestId = await generateDigest(db, articles, config);
-
-    console.log(`[queue-manager] Digest generated: ${digestId}`);
-
-    if (config.ntfyTopic) {
-      const { getDigest } = await import('../db/index.js');
-      const digest = getDigest(digestId);
-      await notifyDigestReady(config.ntfyTopic, digest);
+    const readyCount = getReadyArticleCount();
+    if (readyCount - state.baseline >= config.articleThreshold) {
+      await sendCompilePrompt(config, readyCount);
+      setDigestPromptState({ pending: 1, baseline: readyCount });
     }
   } catch (err) {
-    console.error('[queue-manager] Error processing queue:', err.message);
+    console.error('[queue-manager] Error checking readiness:', err.message);
   } finally {
     running = false;
   }
 }
 
 export function startQueueManager(config) {
-  console.log(`[queue-manager] Started (interval: ${config.checkIntervalMs}ms, threshold: ${config.articleThreshold})`);
+  console.log(
+    `[queue-manager] Started (interval: ${config.checkIntervalMs}ms, prompt batch size: ${config.articleThreshold} ready articles)`
+  );
 
   const intervalId = setInterval(() => processQueue(config), config.checkIntervalMs);
 

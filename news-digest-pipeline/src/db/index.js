@@ -85,10 +85,22 @@ export function insertArticle({ url, title, content, source = 'extension', sourc
   return { id, url, title, status: 'new', duplicate: false };
 }
 
+// Readiness — single definition, used everywhere an article is selected for
+// digest generation: 'new' status AND content has actually been fetched.
+// Without the content check, a burst of newly-added articles can be pulled
+// into a digest before content-fetcher (a separate, slower background loop)
+// has reached them, handing the LLM an empty source and getting back its own
+// "please provide the source text" reply as if it were real commentary.
+const READY_WHERE = `status = 'new' AND digest_id IS NULL AND content IS NOT NULL AND content != ''`;
+
 export function getNewArticles(limit = 50) {
   return db.prepare(
-    'SELECT * FROM articles WHERE status = ? AND digest_id IS NULL ORDER BY created_at ASC LIMIT ?'
-  ).all('new', limit);
+    `SELECT * FROM articles WHERE ${READY_WHERE} ORDER BY created_at ASC LIMIT ?`
+  ).all(limit);
+}
+
+export function getReadyArticleCount() {
+  return db.prepare(`SELECT COUNT(*) as count FROM articles WHERE ${READY_WHERE}`).get().count;
 }
 
 export function getArticleCount(status) {
@@ -174,6 +186,28 @@ export function updateDigest(id, fields) {
   values.push(id);
 
   db.prepare(`UPDATE digests SET ${updates.join(', ')} WHERE id = ?`).run(...values);
+}
+
+export function getDigestPromptState() {
+  return db.prepare('SELECT * FROM digest_prompt_state WHERE id = 1').get();
+}
+
+export function setDigestPromptState(fields) {
+  const allowed = ['pending', 'baseline'];
+  const updates = [];
+  const values = [];
+
+  for (const [key, value] of Object.entries(fields)) {
+    if (allowed.includes(key)) {
+      updates.push(`${key} = ?`);
+      values.push(value);
+    }
+  }
+
+  if (updates.length === 0) return;
+
+  updates.push(`updated_at = datetime('now')`);
+  db.prepare(`UPDATE digest_prompt_state SET ${updates.join(', ')} WHERE id = 1`).run(...values);
 }
 
 export function getDigest(id) {

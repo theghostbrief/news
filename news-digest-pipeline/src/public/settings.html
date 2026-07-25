@@ -764,12 +764,12 @@
         html = `
           <div class="card active">
             <h2>Queue & generation</h2>
-            <p class="card-desc">Once enough articles have accumulated in the queue, the pipeline automatically assembles a digest.</p>
+            <p class="card-desc">Once enough ready articles have accumulated, the Ghost bot sends a Telegram prompt asking whether to compile a digest now or keep adding.</p>
             <div class="row2">
               <div class="field">
                 <label>Article threshold (ARTICLE_THRESHOLD)</label>
                 <input type="number" id="f-articleThreshold" min="1" max="100" value="${esc(q.articleThreshold.value)}">
-                <div class="hint">How many new articles trigger generation (1–100)</div>
+                <div class="hint">Ready articles per compile-prompt batch (1–100)</div>
               </div>
               <div class="field">
                 <label>Max articles per digest (MAX_ARTICLES_PER_DIGEST)</label>
