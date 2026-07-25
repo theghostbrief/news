@@ -103,6 +103,17 @@ export function getReadyArticleCount() {
   return db.prepare(`SELECT COUNT(*) as count FROM articles WHERE ${READY_WHERE}`).get().count;
 }
 
+// Saved but not yet fetched — same predicate as getArticlesNeedingFetch(),
+// as a count instead of rows. Distinguishing this from getReadyArticleCount()
+// is what the post-save Telegram reply needs: right after a save, an article
+// is real (saved) but not yet ready, and the two counts must not be collapsed
+// into one number.
+export function getFetchingArticleCount() {
+  return db.prepare(
+    `SELECT COUNT(*) as count FROM articles WHERE status = 'new' AND (content IS NULL OR content = '')`
+  ).get().count;
+}
+
 export function getArticleCount(status) {
   if (status) {
     return db.prepare('SELECT COUNT(*) as count FROM articles WHERE status = ?').get(status).count;

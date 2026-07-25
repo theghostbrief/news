@@ -1,4 +1,4 @@
-import { insertArticle, getArticleCount, getReadyArticleCount } from '../db/index.js';
+import { insertArticle, getArticleCount, getReadyArticleCount, getFetchingArticleCount } from '../db/index.js';
 import { validateArticleUrl, allowedDomainsForDisplay } from './url-validator.js';
 
 const URL_REGEX = /https?:\/\/[^\s<>"')\]]+/g;
@@ -244,21 +244,20 @@ async function handleUrls(botToken, chatId, messageId, text) {
     }
   }
 
-  // Readiness count, not raw 'new' count: a just-saved article has empty
-  // content until content-fetcher picks it up, so it doesn't move this
-  // number yet — keeps it consistent with what actually drives the compile
-  // prompt below, instead of a figure that jumps the moment a link lands and
-  // then appears to "shrink" again once fetching catches up.
+  // Ready vs fetching are shown separately rather than collapsed into one
+  // number: right after a save, a just-added article is real (saved) but its
+  // content hasn't been fetched yet, so it wouldn't count as ready — showing
+  // only the readiness count made a successful save look like "Total new: 0".
   const readyCount = getReadyArticleCount();
+  const fetchingCount = getFetchingArticleCount();
 
-  let reply = `✓ Saved: ${saved}`;
+  let reply = `Saved: ${saved} | Ready: ${readyCount} | Fetching: ${fetchingCount}`;
   if (duplicates > 0) {
-    reply += ` (duplicates: ${duplicates})`;
+    reply += ` | Duplicates: ${duplicates}`;
   }
   if (rejected > 0) {
-    reply += ` (rejected: ${rejected})`;
+    reply += ` | Rejected: ${rejected}`;
   }
-  reply += `\nTotal new: ${readyCount}`;
 
   await sendMessage(botToken, chatId, reply);
 }
