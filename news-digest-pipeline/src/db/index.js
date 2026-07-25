@@ -52,6 +52,15 @@ export function initDb(dbPath) {
     // (script-guard.js) — NULL when clean, a human-readable summary otherwise.
     db.exec('ALTER TABLE digests ADD COLUMN script_warning TEXT');
   }
+  if (!digestCols.has('facebook_status')) {
+    // 'published' | 'failed' | NULL (never attempted) — set on every Facebook
+    // publish attempt regardless of outcome, independent of facebook_post_id
+    // (which is only ever set on a genuine success).
+    db.exec('ALTER TABLE digests ADD COLUMN facebook_status TEXT');
+  }
+  if (!digestCols.has('facebook_error')) {
+    db.exec('ALTER TABLE digests ADD COLUMN facebook_error TEXT');
+  }
 
   return db;
 }
@@ -147,7 +156,7 @@ export function createDigest({ date, part = 1, articlesCount = 0 }) {
 
 export function updateDigest(id, fields) {
   const allowed = ['content', 'status', 'generation_log', 'published_at',
-    'facebook_post_id', 'telegram_message_id', 'youtube_post_id', 'articles_count',
+    'facebook_post_id', 'facebook_status', 'facebook_error', 'telegram_message_id', 'youtube_post_id', 'articles_count',
     'model', 'input_tokens', 'output_tokens', 'cost_usd', 'script_warning'];
   const updates = [];
   const values = [];

@@ -31,6 +31,8 @@ CREATE TABLE IF NOT EXISTS digests (
   script_warning TEXT,
   published_at TEXT,
   facebook_post_id TEXT,
+  facebook_status TEXT,
+  facebook_error TEXT,
   telegram_message_id TEXT,
   youtube_post_id TEXT,
   created_at TEXT DEFAULT (datetime('now')),

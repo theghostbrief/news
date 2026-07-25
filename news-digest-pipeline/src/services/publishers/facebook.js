@@ -8,10 +8,45 @@
  */
 import { stripDigestMarkers } from '../digest-format.js';
 
+// {pageId}_{postId} — the only shape a genuine Graph API feed-post id takes.
+const POST_ID_RE = /^\d+_\d+$/;
+
+// Cheap GET that fails the same way an expired/revoked/invalid token would
+// fail on the real POST, without side effects. Catches dead tokens before we
+// spend a feed write attempting one.
+async function checkTokenHealth(pageAccessToken) {
+  const url = `https://graph.facebook.com/v19.0/me?access_token=${encodeURIComponent(pageAccessToken)}`;
+  let response;
+  try {
+    response = await fetch(url);
+  } catch (err) {
+    return { ok: false, error: `Network error checking Facebook token health: ${err.message}` };
+  }
+
+  const raw = await response.text();
+  let data;
+  try {
+    data = JSON.parse(raw);
+  } catch {
+    return { ok: false, error: 'Facebook token health check returned an unreadable response.' };
+  }
+
+  if (!response.ok || data.error) {
+    return { ok: false, error: `Facebook token health check failed: ${data.error?.message || `HTTP ${response.status}`}` };
+  }
+  return { ok: true };
+}
+
 export async function publishToFacebook(pageAccessToken, pageId, content) {
   if (!pageAccessToken || !pageId) {
     console.error('[facebook] Missing pageAccessToken or pageId');
     return { error: 'Facebook page ID or access token is not configured (FACEBOOK_PAGE_ID / FACEBOOK_PAGE_ACCESS_TOKEN in .env).' };
+  }
+
+  const health = await checkTokenHealth(pageAccessToken);
+  if (!health.ok) {
+    console.error('[facebook] Token health check failed, skipping publish:', health.error);
+    return { error: health.error };
   }
 
   const clean = stripDigestMarkers(content);
@@ -54,6 +89,11 @@ export async function publishToFacebook(pageAccessToken, pageId, content) {
   }
 
   const postId = data.id;
+  if (!postId || !POST_ID_RE.test(postId)) {
+    console.error('[facebook] Response missing a valid post id:', raw.slice(0, 500));
+    return { error: 'Facebook did not return a valid post id — treating as a failed publish.' };
+  }
+
   return {
     postId,
     url: `https://www.facebook.com/${postId.replace('_', '/posts/')}`,

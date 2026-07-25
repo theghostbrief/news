@@ -319,6 +319,11 @@
       cursor: default;
       box-shadow: none;
     }
+    .plat-btn.failed {
+      background: rgba(220,38,38,0.08);
+      color: #dc2626;
+      border-color: rgba(220,38,38,0.3);
+    }
 
     /* Delete button */
     .btn-delete {
@@ -619,9 +624,10 @@
           const tgBtn = tgSent
             ? `<button class="plat-btn sent" disabled>✓ TG</button>`
             : `<button class="plat-btn" onclick="publishPlatform('${d.id}','telegram',this)">📨 TG</button>`;
+          const fbFailed = !fbSent && d.facebook_status === 'failed';
           const fbBtn = fbSent
             ? `<button class="plat-btn sent" disabled>✓ FB</button>`
-            : `<button class="plat-btn" onclick="publishPlatform('${d.id}','facebook',this)">📘 FB</button>`;
+            : `<button class="plat-btn${fbFailed ? ' failed' : ''}" onclick="publishPlatform('${d.id}','facebook',this)" title="${fbFailed ? esc(d.facebook_error || 'Facebook publish failed') : ''}">${fbFailed ? '✗ FB' : '📘 FB'}</button>`;
 
           const delBtn = `<button class="btn-delete" onclick="deleteDigest('${d.id}')">✕</button>`;
           actionBtn = `<div class="platform-row"><button class="btn btn-preview" onclick="previewDigest('${d.id}')">&#128065;</button>${tgBtn}${fbBtn}<button class="btn btn-copy" onclick="copyDigest('${d.id}', this)">&#128203;</button>${delBtn}</div>`;

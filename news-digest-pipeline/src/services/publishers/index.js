@@ -23,15 +23,28 @@ export async function publishDigest(digest, config, platforms) {
 
   const updateFields = {};
 
-  // Facebook
+  // Facebook — a Facebook outage/token failure must never crash the rest of
+  // the run (Telegram, etc.), so this is wrapped defensively even though
+  // publishToFacebook() already catches its own network/parse errors.
   if (shouldPublish('facebook') && config.facebookPageAccessToken && config.facebookPageId) {
-    results.facebook = await publishToFacebook(
-      config.facebookPageAccessToken,
-      config.facebookPageId,
-      digest.content,
-    );
+    try {
+      results.facebook = await publishToFacebook(
+        config.facebookPageAccessToken,
+        config.facebookPageId,
+        digest.content,
+      );
+    } catch (err) {
+      console.error('[publishers] Unexpected Facebook publish error:', err.message);
+      results.facebook = { error: `Unexpected error: ${err.message}` };
+    }
+
     if (results.facebook?.postId) {
       updateFields.facebook_post_id = results.facebook.postId;
+      updateFields.facebook_status = 'published';
+      updateFields.facebook_error = null;
+    } else {
+      updateFields.facebook_status = 'failed';
+      updateFields.facebook_error = results.facebook?.error || 'Unknown Facebook publish failure';
     }
   }
 
@@ -62,11 +75,20 @@ export async function publishDigest(digest, config, platforms) {
     }
   }
 
-  // Update digest record with post IDs and mark as published
-  const hasAnyResult = Object.keys(updateFields).length > 0;
-  if (hasAnyResult) {
+  // A genuine success (not just facebook_status/facebook_error bookkeeping)
+  // is what flips the digest to 'published' — a Facebook failure alone must
+  // not mark the digest as published.
+  const hasGenuineSuccess = Boolean(
+    updateFields.facebook_post_id || updateFields.telegram_message_id || updateFields.youtube_post_id
+  );
+  if (hasGenuineSuccess) {
     updateFields.status = 'published';
     updateFields.published_at = new Date().toISOString();
+  }
+
+  // Persist whatever we have — including a Facebook failure alone — so the
+  // digest row always reflects the true per-platform outcome.
+  if (Object.keys(updateFields).length > 0) {
     updateDigest(digest.id, updateFields);
   }
 
