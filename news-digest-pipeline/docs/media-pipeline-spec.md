@@ -243,9 +243,21 @@ no classes unless the repo uses them).
   `youtube-video.js` reused for Shorts (vertical video ≤ 3 min is auto-Short;
   include #Shorts in title/description).
 
-### 4.11 `services/fb-post-fetcher.js` — FB posts as a source (browserless, no login)
+### 4.11 `services/fb-post-fetcher.js` — FB posts as a source (fallback/enhancement — see status note)
+
+**Status (2026-07):** manual-content mode (shipped) already covers the core
+job here — a Telegram message with exactly one URL and 40+ chars of
+surrounding text stores that text as the article's content directly, no
+fetch, immediately ready. Since Facebook 403s any server-side scrape attempt
+anyway, pasting an FB post's URL alongside its copied text is already the
+**working path** for getting FB content into a digest today, with zero new
+code. Everything below is optional automation on top of that — skipping the
+manual copy/paste step and adding structured author attribution — not a
+blocker for FB-as-a-source.
+
 - Extends article ingestion: `POST /api/articles` and the Telegram bot accept
-  `facebook.com` / `fb.watch` post URLs in addition to Perplexity links.
+  `facebook.com` / `fb.watch` post URLs same as any other article URL (no
+  domain allowlist applies to ingestion at all — see §8).
 - `fetchFbPost(url) -> {authorName, authorUrl, text, imageUrls[], postedAt}`
 - Extraction chain (stop at first success):
   1. **Embed endpoint:** GET `https://www.facebook.com/plugins/post.php?href=<encoded_url>&show_text=true`
@@ -254,28 +266,38 @@ no classes unless the repo uses them).
   2. **OG meta fallback:** GET the post URL logged-out; extract `og:title`
      (author/page), `og:description` (text snippet, may be truncated),
      `og:image`.
-  3. **Failure state:** article saved with `status='fetch_failed'`,
-     `fetch_error` set; dashboard shows "couldn't read — paste text manually"
-     with an editable text field (route already supports content PATCH).
+  3. **Failure state:** if both fail, the article is saved
+     `status='fetch_failed'` like any other failed fetch — the dashboard's
+     manual-paste editor and Telegram's manual-content mode (both already
+     shipped) are the fallback, not new UI to build. In practice this only
+     matters when someone pastes a bare FB URL with no accompanying text;
+     including the text upfront skips the fetch attempt entirely.
 - Store as `articles` row: `source='facebook'`, `content=text`,
-  `title=authorName + first line`, keep `authorName`/`authorUrl` in new columns
-  `articles.author_name`, `articles.author_url`.
-- **Politeness/durability:** cache fetched posts (URL-keyed, permanent — a post
-  doesn't change), max 1 request/10 s to facebook.com, single retry, 10 s
-  timeout, honest desktop User-Agent. Optional `FB_FETCH_PROXY_URL` env for a
-  cheap HTTP proxy if the VPS IP ever gets blocked. Never use the owner's FB
-  credentials or cookies anywhere in this path.
-- **Prompt handling:** in Phase-A commentary, FB-source articles get one extra
-  instruction line (prompt partial `prompts/en/fb-source-note.md`): treat as an
-  opinion/post by "<author>", attribute by name, quote at most one short phrase,
-  link to the original. Assembly output for these items renders as
-  "<author> writes: <commentary> → <link>".
+  `title=authorName + first line`, keep `authorName`/`authorUrl` in new
+  columns `articles.author_name`, `articles.author_url` — populated only when
+  this automated extraction runs; a manual-content paste leaves them null and
+  the article is treated as a normal source (still fully usable, just without
+  the by-line framing below).
+- **Politeness/durability:** cache fetched posts (URL-keyed, permanent — a
+  post doesn't change), max 1 request/10 s to facebook.com, single retry,
+  10 s timeout, honest desktop User-Agent. Optional `FB_FETCH_PROXY_URL` env
+  for a cheap HTTP proxy if the VPS IP ever gets blocked. Never use the
+  owner's FB credentials or cookies anywhere in this path.
+- **Prompt handling:** in Phase-A commentary, FB-source articles with a
+  populated `author_name` get one extra instruction line (prompt partial
+  `prompts/en/fb-source-note.md`): treat as an opinion/post by "<author>",
+  attribute by name, quote at most one short phrase, link to the original.
+  Assembly output for these items renders as "<author> writes: <commentary>
+  → <link>".
 - **Visuals:** `og:image` from the post feeds visual-sourcer Tier 1 with
   `source_domain='facebook.com/<author>'` attribution overlay.
 - **Validator note:** facebook.com joins the SEPARATE media-fetch SSRF-guarded
-  path (§8), NOT the perplexity.ai article whitelist. Only `/plugins/post.php`
-  and canonical post URL patterns (`/posts/`, `/permalink`, `pfbid`, `story.php`,
-  `/reel/`, `/watch/`) are accepted; anything else is rejected.
+  path (§8) for this automated fetcher specifically — unrelated to
+  article-ingestion validation, which (per §8) has no domain restriction at
+  all now. Only `/plugins/post.php` and canonical post URL patterns
+  (`/posts/`, `/permalink`, `pfbid`, `story.php`, `/reel/`, `/watch/`) are
+  accepted by this fetcher; manual-content-mode pastes have no such
+  restriction since they never trigger a fetch.
 
 ### 4.11b `services/tg-post-fetcher.js` + bot extension — Telegram posts as a source
 Two ingestion routes, preferred first:
@@ -423,11 +445,19 @@ REEL_OFFSETS_MIN=30,240,540      # minutes after digest publish
 
 ## 8. Security & policy notes (carry over repo's posture)
 
-- **URL whitelist:** `url-validator.js` currently whitelists `perplexity.ai` only.
-  `visual-sourcer.js` fetches arbitrary news domains → introduce a SEPARATE
-  fetch path with its own SSRF guard: resolve DNS, reject private/loopback/link-local
-  IPs, HTTPS only, size cap 15 MB, image content-types only, no redirects to
-  non-HTTPS. Do not widen the article-ingestion whitelist.
+- **Article ingestion has no domain allowlist.** `url-validator.js` accepts any
+  well-formed HTTPS URL — format, scheme, and control-character validation
+  only (the `perplexity.ai`-only allowlist and its `ALLOWED_ARTICLE_DOMAINS`
+  extension mechanism were both removed). The user manages junk/paywalled
+  sources themselves; nothing here vets domains anymore.
+  This does NOT extend to media fetching. `visual-sourcer.js` still needs its
+  own, fully separate SSRF-guarded fetch path for images: resolve DNS, reject
+  private/loopback/link-local IPs, HTTPS only, size cap 15 MB, image
+  content-types only, no redirects to non-HTTPS. The two paths must stay
+  isolated — removing the article-ingestion allowlist is not license to skip
+  or weaken the image-fetch SSRF guard; they defend against different things
+  (arbitrary text-source ingestion vs. fetching binary content from pages
+  found via that ingestion).
 - All new POST routes behind existing Bearer/session auth + rate limiting.
 - Media files are public by design (served for podcast/site); everything else
   under `data/` stays non-served.
@@ -476,3 +506,74 @@ REEL_OFFSETS_MIN=30,240,540      # minutes after digest publish
 
 Fixed: VPS $7–12/mo (2 vCPU / 4 GB recommended for ffmpeg + whisper.cpp).
 Intro/outro (5 s each) — one-time asset, stored in `assets/brand/`.
+
+---
+
+## 11. Threads publishing (parallel track — no media-pipeline dependencies)
+
+Republishes the digest's existing TOP3 items as a Threads reply-chain.
+Generates no media and depends on nothing in §§2-7 (segments, TTS, video,
+etc.) — it only needs a `draft` digest with the `<!--TOP3 [n1,n2,n3]-->`
+marker already in the assembled text (already emitted today, per §5). Can
+ship alongside or before P1; not part of the P1–P6 sequence.
+
+### 11.1 Format
+- Lead post: TOP3 item #1 — headline + commentary, trimmed to Threads' post
+  character limit (currently 500 chars), no link.
+- Reply 1: TOP3 item #2, posted as a reply to the lead post (`reply_to_id`).
+- Reply 2: TOP3 item #3, posted as a reply to Reply 1 — chained sequentially
+  (each reply answers the previous post, not all replying to the lead), the
+  way a human reply-thread reads.
+- Closing reply: "Full brief: <link>" — reuses whatever canonical link the
+  digest already has (site URL once §4.9/P3 ships; Telegram channel/post
+  link until then).
+- Reuses the existing `<!--TOP3 [n1,n2,n3]-->` marker (§5) — no prompt
+  changes needed. Marker stripping before posting reuses the existing
+  `stripDigestMarkers()` (`digest-format.js`) pattern, same as Telegram/FB.
+
+### 11.2 Auth
+- Threads has its own API (`graph.threads.net`), separate from the Facebook
+  Graph API used for Page posts today. It can live in the same Meta Developer
+  app (add the "Threads API" product), but needs its own token: a Threads
+  User Access Token via Threads Login/OAuth, scopes `threads_basic` +
+  `threads_content_publish`.
+- **Verify at implementation time, don't assume:** it is NOT confirmed that
+  the existing Facebook Page System User token covers Threads — Threads
+  tokens are tied to the Threads-Login OAuth flow for the account, which may
+  require its own one-time interactive consent step (same class of setup as
+  the original Facebook Page token exchange in `docs/facebook-page-setup.md`,
+  possibly not literally reusable as the same token).
+- Long-lived Threads tokens follow the same ~60-day refresh pattern as the
+  Facebook token — same rotation discipline already established applies.
+
+### 11.3 New publisher module
+- `services/publishers/threads-publisher.js` — registered in
+  `publishers/index.js` under platform name `threads`, alongside
+  `facebook.js`/`telegram.js`.
+- `publishThreadsChain(digest, config) -> {threadIds: [leadId, reply1Id, reply2Id, closingId]}`.
+  Threads' publish flow is two-step per post (create a container, then
+  publish it) — same shape as Instagram's Graph API container flow.
+- A failure partway through the chain must not silently leave an orphaned
+  reply — stop and record how far it got (see status, below).
+
+### 11.4 Status tracking — mirrors the Facebook pattern, not publish_queue
+`publish_queue` (§3) is shaped for scheduled, retryable media posts
+(`media_path TEXT NOT NULL`, `publish_at` for staggered timing) — built for
+reels in P4. A Threads reply-chain is neither scheduled nor media-based; it
+publishes immediately, alongside the existing Telegram/Facebook step. It
+follows the Facebook/Telegram pattern instead: new `digests` columns
+`threads_status` ('published'|'failed'|NULL), `threads_error`,
+`threads_thread_ids` (JSON array of the chain's post IDs) — mirrors the
+existing truthful `facebook_status`/`facebook_error` columns exactly (never
+`'published'` on a partial chain). Fires from the same `publishDigest()` call
+in `publishers/index.js` that already handles Telegram/Facebook. No
+`publish_queue` involvement; retry = re-trigger publish, same UX as the
+existing FB retry affordance. Dashboard: a `✓ Threads`/`✗ Threads` indicator
+next to the existing TG/FB buttons, same pattern as `facebook_status`.
+
+### 11.5 `.env` additions
+```
+THREADS_USER_ID=
+THREADS_ACCESS_TOKEN=
+THREADS_LINK_TEXT=Full brief:      # prefix for the closing reply's link line
+```
