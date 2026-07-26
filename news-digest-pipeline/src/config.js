@@ -161,7 +161,10 @@ function buildConfig() {
 
     // Server-side content fetcher: backfills articles saved without content
     // (e.g. via Telegram) since the local Mac fetcher is optional/Mac-only.
-    contentFetchIntervalMs: parseInt(process.env.CONTENT_FETCH_INTERVAL_MS || '120000', 10),
+    // Retry-fallback interval only — new saves trigger an immediate fetch
+    // pass via content-fetcher.js's triggerFetch() rather than waiting on
+    // this tick, so this just catches whatever a triggered pass missed.
+    contentFetchIntervalMs: parseInt(process.env.CONTENT_FETCH_INTERVAL_MS || '30000', 10),
     contentFetchBatchSize: parseInt(process.env.CONTENT_FETCH_BATCH_SIZE || '5', 10),
     contentFetchDomainDelayMs: parseInt(process.env.CONTENT_FETCH_DOMAIN_DELAY_MS || '3000', 10),
     // Opt-in fallback for KNOWN_BLOCKED_DOMAINS (content-fetcher.js): proxies

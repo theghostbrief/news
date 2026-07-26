@@ -16,8 +16,8 @@ router.post('/', async (req, res) => {
   try {
     const { url } = req.body;
 
-    // Single-source URL validation (HTTPS + perplexity.ai + no control chars);
-    // store only the normalized href.
+    // Single-source URL validation (HTTPS, well-formed, no control chars, no
+    // source domain restriction); store only the normalized href.
     const v = validateArticleUrl(url);
     if (!v.ok) {
       return res.status(400).json({ error: v.error });

@@ -5,12 +5,19 @@ vi.mock('./digest-generator.js', () => ({
   generateDigest: generateDigestMock,
 }));
 
+const triggerFetchMock = vi.hoisted(() => vi.fn());
+vi.mock('./content-fetcher.js', () => ({
+  triggerFetch: triggerFetchMock,
+}));
+
 import {
   initDb,
+  getDb,
   insertArticle,
   createDigest,
   assignArticlesToDigest,
   getReadyArticleCount,
+  getFetchingArticleCount,
   getDigestPromptState,
   setDigestPromptState,
 } from '../db/index.js';
@@ -42,6 +49,7 @@ beforeEach(() => {
   initDb(':memory:');
   counter = 0;
   generateDigestMock.mockReset();
+  triggerFetchMock.mockReset();
   vi.stubGlobal(
     'fetch',
     vi.fn().mockResolvedValue({
@@ -89,5 +97,64 @@ describe('handleCompileDigest via the Compile-digest callback', () => {
 
     expect(generateDigestMock).not.toHaveBeenCalled();
     expect(getDigestPromptState().pending).toBe(0);
+  });
+});
+
+function messageUpdate(text, messageId = 1) {
+  return { message: { chat: { id: 12345 }, message_id: messageId, text } };
+}
+
+function articleByUrl(url) {
+  return getDb().prepare('SELECT * FROM articles WHERE url = ?').get(url);
+}
+
+describe('handleUrls — manual content vs. fetch mode', () => {
+  it('(a) URL + long text: stored as manual content, immediately ready, not queued for fetch', async () => {
+    const url = 'https://www.perplexity.ai/discover/you/manual-one';
+    const text = `Ukraine says a strike overnight destroyed a refinery unit near Kaliningrad, the third such strike claimed this month. ${url}`;
+
+    await handleTelegramUpdate(messageUpdate(text), config);
+
+    expect(triggerFetchMock).not.toHaveBeenCalled();
+
+    const row = articleByUrl(url);
+    expect(row.status).toBe('new');
+    expect(row.content).toContain('Ukraine says a strike overnight destroyed a refinery unit');
+    expect(row.content).not.toContain('perplexity.ai');
+    expect(row.title).toBeNull(); // insertArticle stores '' as NULL
+
+    expect(getReadyArticleCount()).toBe(1);
+    expect(getFetchingArticleCount()).toBe(0);
+  });
+
+  it('(b) URL + short caption: normal fetch path (content empty, queued)', async () => {
+    const url = 'https://www.perplexity.ai/discover/you/manual-two';
+    const text = `check this out ${url}`; // 16 chars of leftover text — below the 40-char threshold
+
+    await handleTelegramUpdate(messageUpdate(text), config);
+
+    expect(triggerFetchMock).toHaveBeenCalledTimes(1);
+
+    const row = articleByUrl(url);
+    expect(row.status).toBe('new');
+    expect(row.content).toBeNull(); // insertArticle stores '' as NULL
+
+    expect(getFetchingArticleCount()).toBe(1);
+    expect(getReadyArticleCount()).toBe(0);
+  });
+
+  it('(c) 2 URLs + text: normal fetch path for both, manual-content mode never applies', async () => {
+    const urlA = 'https://www.perplexity.ai/discover/you/manual-three';
+    const urlB = 'https://www.perplexity.ai/discover/you/manual-four';
+    const text = `Two important pieces today, worth reading both of these very carefully: ${urlA} and also ${urlB}`;
+
+    await handleTelegramUpdate(messageUpdate(text), config);
+
+    expect(triggerFetchMock).toHaveBeenCalledTimes(1);
+
+    expect(articleByUrl(urlA).content).toBeNull(); // insertArticle stores '' as NULL
+    expect(articleByUrl(urlB).content).toBeNull();
+    expect(getFetchingArticleCount()).toBe(2);
+    expect(getReadyArticleCount()).toBe(0);
   });
 });

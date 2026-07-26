@@ -39,9 +39,10 @@ export function isPrivateIP(ip) {
 
 /**
  * Resolve a hostname and reject if ANY resolved address is private/reserved.
- * The hostname already passed the perplexity.ai allowlist by the time this
- * runs — this defends against that hostname's DNS answer being rebound to a
- * private address between validation and connect.
+ * The hostname already passed format validation (validateArticleUrl) by the
+ * time this runs — this defends against that hostname's DNS answer being
+ * rebound to a private address between validation and connect. This check is
+ * independent of any source domain policy: it applies to every hostname.
  */
 async function assertPublicHostname(hostname) {
   const addresses = await lookup(hostname, { all: true, verbatim: true });
@@ -57,10 +58,10 @@ async function assertPublicHostname(hostname) {
 
 /**
  * SSRF-hardened fetch for article URLs. Every redirect hop is re-validated
- * against the perplexity.ai allowlist and re-resolved to rule out a private
- * address (redirect: 'manual', so we control the loop instead of trusting
- * fetch() to follow blindly), and the response body is read under a hard byte
- * cap enforced on actual bytes received, not the (spoofable) Content-Length
+ * for URL format/HTTPS and re-resolved to rule out a private address
+ * (redirect: 'manual', so we control the loop instead of trusting fetch() to
+ * follow blindly), and the response body is read under a hard byte cap
+ * enforced on actual bytes received, not the (spoofable) Content-Length
  * header.
  *
  * Returns a minimal Response-like object: { ok, status, text() }.

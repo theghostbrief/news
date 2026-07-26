@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const sendCompilePromptMock = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
-vi.mock('./telegram-bot.js', () => ({
+vi.mock('./compile-prompt.js', () => ({
   sendCompilePrompt: sendCompilePromptMock,
 }));
 

@@ -1,8 +1,8 @@
 import { getArticlesNeedingFetch, markArticleFetched, markArticleFetchFailed } from '../db/index.js';
 import { fetchArticleContent } from './article-fetcher.js';
 import { fetchViaJinaReader } from './jina-reader.js';
-
-let running = false;
+import { checkReadyAndPrompt } from './queue-manager.js';
+import { scheduleStatusUpdate } from './status-updater.js';
 
 // Domains a plain server-side fetch can never reach, verified 2026-07-22:
 // perplexity.ai sits behind Cloudflare's bot challenge, which returns HTTP 403
@@ -27,12 +27,39 @@ async function throttleHost(hostname, minGapMs) {
   lastRequestByHost.set(hostname, Date.now());
 }
 
-async function processFetchTick(config) {
+// An on-demand trigger (article just saved) should drain far more than the
+// periodic tick's small batch — the point is to fetch a just-added burst
+// promptly, not trickle it out over several interval ticks. Per-host
+// throttling still applies within this, so it can't hammer any single host.
+const ON_DEMAND_FETCH_LIMIT = 100;
+const TRIGGER_DEBOUNCE_MS = 500;
+let debounceTimer = null;
+
+/**
+ * Request an immediate (short-debounced) fetch pass instead of waiting for
+ * the next interval tick. Called right after an article is saved. Debounced
+ * so a burst of saves (e.g. several links pasted in one message, or several
+ * messages in quick succession) collapses into a single triggered pass
+ * rather than one per save.
+ */
+export function triggerFetch(config) {
+  if (debounceTimer) return;
+  debounceTimer = setTimeout(() => {
+    debounceTimer = null;
+    processFetchTick(config, ON_DEMAND_FETCH_LIMIT).catch((err) => {
+      console.error('[content-fetcher] Triggered fetch error:', err.message);
+    });
+  }, TRIGGER_DEBOUNCE_MS);
+}
+
+let running = false;
+
+async function processFetchTick(config, limit) {
   if (running) return;
   running = true;
 
   try {
-    const articles = getArticlesNeedingFetch(config.contentFetchBatchSize);
+    const articles = getArticlesNeedingFetch(limit ?? config.contentFetchBatchSize);
     if (articles.length === 0) return;
 
     console.log(`[content-fetcher] Fetching content for ${articles.length} article(s)`);
@@ -46,9 +73,12 @@ async function processFetchTick(config) {
             const { title, content } = await fetchViaJinaReader(article.url);
             markArticleFetched(article.id, { title, content });
             console.log(`[content-fetcher] Fetched via Jina Reader fallback: ${article.url} (${content.length} chars)`);
+            await checkReadyAndPrompt(config);
+            scheduleStatusUpdate(config);
           } catch (err) {
             markArticleFetchFailed(article.id, `Blocked domain, Jina Reader fallback also failed: ${err.message}`);
             console.warn(`[content-fetcher] Jina Reader fallback failed: ${article.url} — ${err.message}`);
+            scheduleStatusUpdate(config);
           }
         } else {
           markArticleFetchFailed(
@@ -56,6 +86,7 @@ async function processFetchTick(config) {
             `${hostname} blocks server-side fetches (Cloudflare bot protection) — paste content manually, or enable JINA_READER_FALLBACK`
           );
           console.log(`[content-fetcher] Skipped (known-blocked domain): ${article.url}`);
+          scheduleStatusUpdate(config);
         }
         continue;
       }
@@ -66,9 +97,21 @@ async function processFetchTick(config) {
         const { title, content } = await fetchArticleContent(article.url);
         markArticleFetched(article.id, { title, content });
         console.log(`[content-fetcher] Fetched: ${article.url} (${content.length} chars)`);
+        // Reactive readiness check — fire the compile prompt as soon as this
+        // article's content lands and crosses the threshold, instead of
+        // waiting on the next queue-manager interval tick or another
+        // incoming Telegram message.
+        await checkReadyAndPrompt(config);
+        // Live-edit the last "Saved | Ready | Fetching" reply so the user
+        // watches the numbers move in real time, without sending anything.
+        scheduleStatusUpdate(config);
       } catch (err) {
         markArticleFetchFailed(article.id, err.message);
         console.warn(`[content-fetcher] Failed: ${article.url} — ${err.message}`);
+        // A failure still moves the article out of "Fetching" (into
+        // fetch_failed) — reflect that instead of letting it silently vanish
+        // from the live counts.
+        scheduleStatusUpdate(config);
       }
     }
   } catch (err) {

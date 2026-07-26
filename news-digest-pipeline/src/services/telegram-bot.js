@@ -1,101 +1,16 @@
 import { insertArticle, getArticleCount, getReadyArticleCount, getFetchingArticleCount } from '../db/index.js';
-import { validateArticleUrl, allowedDomainsForDisplay } from './url-validator.js';
+import { validateArticleUrl } from './url-validator.js';
+import { sendTelegramMessage as sendMessage, answerCallbackQuery, setTelegramWebhook as setWebhook } from './telegram-api.js';
+import { COMPILE_CALLBACK_DATA, KEEP_ADDING_CALLBACK_DATA } from './compile-prompt.js';
+import { triggerFetch } from './content-fetcher.js';
+import { formatStatusReply, recordStatusMessage } from './status-updater.js';
 
 const URL_REGEX = /https?:\/\/[^\s<>"')\]]+/g;
 
-const COMPILE_CALLBACK_DATA = 'compile_digest';
-const KEEP_ADDING_CALLBACK_DATA = 'keep_adding';
-
-/**
- * Send a message via Telegram Bot API using fetch.
- */
-async function sendMessage(botToken, chatId, text, extra = {}) {
-  const url = `https://api.telegram.org/bot${botToken}/sendMessage`;
-  const resp = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      chat_id: chatId,
-      text,
-      parse_mode: 'HTML',
-      disable_web_page_preview: true,
-      ...extra,
-    }),
-  });
-
-  if (!resp.ok) {
-    const body = await resp.text();
-    console.error(`[telegram-bot] sendMessage failed: ${resp.status} ${body}`);
-    return null;
-  }
-
-  const data = await resp.json();
-  return data.result || null;
-}
-
-/**
- * Acknowledge a callback query so Telegram stops the button's loading spinner.
- */
-async function answerCallbackQuery(botToken, callbackQueryId, text) {
-  const url = `https://api.telegram.org/bot${botToken}/answerCallbackQuery`;
-  const resp = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ callback_query_id: callbackQueryId, ...(text ? { text } : {}) }),
-  });
-
-  if (!resp.ok) {
-    const body = await resp.text();
-    console.error(`[telegram-bot] answerCallbackQuery failed: ${resp.status} ${body}`);
-  }
-}
-
-/**
- * Register webhook URL with Telegram.
- */
-async function setWebhook(botToken, webhookUrl, secretToken) {
-  const url = `https://api.telegram.org/bot${botToken}/setWebhook`;
-  const resp = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      url: webhookUrl,
-      secret_token: secretToken,
-      // callback_query is required for the "Compile digest" / "Keep adding"
-      // inline-keyboard buttons to reach the webhook.
-      allowed_updates: ['message', 'callback_query'],
-    }),
-  });
-
-  const data = await resp.json();
-  if (data.ok) {
-    console.log(`[telegram-bot] Webhook set: ${webhookUrl}`);
-  } else {
-    console.error(`[telegram-bot] Failed to set webhook:`, data);
-  }
-  return data;
-}
-
-/**
- * Send the interactive "compile now or keep adding?" prompt. Called by
- * queue-manager.js once ready-article count crosses a batch threshold.
- */
-export async function sendCompilePrompt(config, readyCount) {
-  const text = [
-    `📝 <b>${readyCount} articles ready</b> for a digest.`,
-    '',
-    'Compile now, or keep adding?',
-  ].join('\n');
-
-  await sendMessage(config.telegramBotToken, config.telegramChatId, text, {
-    reply_markup: {
-      inline_keyboard: [[
-        { text: '📝 Compile digest', callback_data: COMPILE_CALLBACK_DATA },
-        { text: '➕ Keep adding', callback_data: KEEP_ADDING_CALLBACK_DATA },
-      ]],
-    },
-  });
-}
+// A message with exactly one URL and at least this much leftover text (after
+// stripping the URL and trimming) is treated as manually-pasted content
+// rather than a bare link to fetch — see handleUrls().
+const MANUAL_CONTENT_MIN_CHARS = 40;
 
 /**
  * Handle /status command.
@@ -197,7 +112,7 @@ export async function deleteTelegramMessage(botToken, chatId, messageId) {
 /**
  * Handle incoming message with URLs.
  */
-async function handleUrls(botToken, chatId, messageId, text) {
+async function handleUrls(botToken, chatId, messageId, text, config) {
   const urls = text.match(URL_REGEX);
 
   if (!urls || urls.length === 0) {
@@ -208,8 +123,9 @@ async function handleUrls(botToken, chatId, messageId, text) {
   // Deduplicate URLs within the same message
   const uniqueUrls = [...new Set(urls)];
 
-  // Filter + normalize via the shared article-URL contract (HTTPS +
-  // perplexity.ai + no control chars). Store only the normalized href.
+  // Filter + normalize via the shared article-URL contract (HTTPS, well-formed,
+  // no control chars — no source domain restriction). Store only the
+  // normalized href.
   const validUrls = [];
   for (const u of uniqueUrls) {
     const v = validateArticleUrl(u);
@@ -218,10 +134,44 @@ async function handleUrls(botToken, chatId, messageId, text) {
 
   const rejected = uniqueUrls.length - validUrls.length;
   if (validUrls.length === 0) {
-    let reply = `⚠️ No valid links found (accepted: ${allowedDomainsForDisplay().join(', ')}).`;
-    if (rejected > 0) reply += `\nRejected: ${rejected}`;
+    let reply = '⚠️ No valid links found — check the URL format (must be HTTPS).';
+    if (rejected > 1) reply += `\nRejected: ${rejected}`;
     await sendMessage(botToken, chatId, reply);
     return;
+  }
+
+  // Manual-content mode: exactly one URL, plus enough surrounding text that
+  // it reads as pasted article content rather than a caption. Store the text
+  // directly as content (same "content present -> status='new', immediately
+  // ready" contract PATCH /api/articles/:id uses to accept manually-pasted
+  // content for fetch_failed articles) — no fetch, no triggerFetch, and no
+  // silent loss of what was typed. Title stays empty, same as the fetch path;
+  // digest-generator.js already tolerates that.
+  if (uniqueUrls.length === 1 && validUrls.length === 1) {
+    const leftoverText = text.replace(uniqueUrls[0], '').trim();
+    if (leftoverText.length >= MANUAL_CONTENT_MIN_CHARS) {
+      const result = insertArticle({
+        url: validUrls[0],
+        title: '',
+        content: leftoverText,
+        source: 'telegram',
+        sourceChatId: String(chatId),
+        sourceMessageId: messageId != null ? String(messageId) : null,
+      });
+
+      const readyCount = getReadyArticleCount();
+      const reply = result.duplicate
+        ? `⚠️ Already saved (duplicate) — manual content not stored.\nReady: ${readyCount}`
+        : `Saved (manual content): 1 | Ready: ${readyCount}`;
+
+      // Not recorded as the live-edit target: there's no fetch in flight for
+      // this save, so nothing would ever update it — and a later edit from
+      // an unrelated fetch would overwrite this message with the generic
+      // "Saved | Ready | Fetching" format, erasing the "(manual content)"
+      // label that's the whole point of this reply.
+      await sendMessage(botToken, chatId, reply);
+      return;
+    }
   }
 
   let saved = 0;
@@ -244,22 +194,28 @@ async function handleUrls(botToken, chatId, messageId, text) {
     }
   }
 
+  // Ask content-fetcher to fetch the new saves right away instead of
+  // waiting for its own interval tick — debounced, so a burst of links (or
+  // several messages in a row) collapses into one triggered pass.
+  if (saved > 0) {
+    triggerFetch(config);
+  }
+
   // Ready vs fetching are shown separately rather than collapsed into one
   // number: right after a save, a just-added article is real (saved) but its
   // content hasn't been fetched yet, so it wouldn't count as ready — showing
   // only the readiness count made a successful save look like "Total new: 0".
+  // This reply is necessarily a snapshot taken before the just-triggered
+  // fetch can finish — status-updater.js live-edits it in place as each
+  // article actually completes, so the number doesn't just sit stale.
   const readyCount = getReadyArticleCount();
   const fetchingCount = getFetchingArticleCount();
+  const reply = formatStatusReply({ saved, duplicates, rejected, readyCount, fetchingCount });
 
-  let reply = `Saved: ${saved} | Ready: ${readyCount} | Fetching: ${fetchingCount}`;
-  if (duplicates > 0) {
-    reply += ` | Duplicates: ${duplicates}`;
+  const sent = await sendMessage(botToken, chatId, reply);
+  if (sent?.message_id) {
+    recordStatusMessage(chatId, sent.message_id, { saved, duplicates, rejected });
   }
-  if (rejected > 0) {
-    reply += ` | Rejected: ${rejected}`;
-  }
-
-  await sendMessage(botToken, chatId, reply);
 }
 
 /**
@@ -337,7 +293,7 @@ export async function handleTelegramUpdate(update, config) {
   }
 
   // Otherwise try to extract URLs
-  await handleUrls(botToken, chatId, message.message_id, text);
+  await handleUrls(botToken, chatId, message.message_id, text, config);
 }
 
 /**

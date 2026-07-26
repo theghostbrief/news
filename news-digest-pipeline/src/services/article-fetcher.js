@@ -16,8 +16,8 @@ const REMOVE_SELECTORS = 'script, style, nav, header, footer, [class*="sideBarWi
  * Returns { title, content } or throws on failure.
  */
 async function fetchWithCheerio(url) {
-  // safeFetch enforces the perplexity.ai allowlist on every redirect hop, a
-  // private-IP DNS check, and a response-size cap — see safe-fetch.js.
+  // safeFetch enforces URL format/HTTPS, a private-IP DNS check on every
+  // redirect hop, and a response-size cap — see safe-fetch.js.
   const response = await safeFetch(url, { timeoutMs: 15000 });
   const html = await response.text();
   return extractFromHtml(html);
