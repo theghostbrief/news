@@ -221,6 +221,33 @@ export function setDigestPromptState(fields) {
   db.prepare(`UPDATE digest_prompt_state SET ${updates.join(', ')} WHERE id = 1`).run(...values);
 }
 
+export function getDuplicateReview() {
+  const row = db.prepare('SELECT * FROM duplicate_review WHERE id = 1').get();
+  return {
+    active: !!row.active,
+    chatId: row.chat_id,
+    candidateArticleIds: row.candidate_article_ids ? JSON.parse(row.candidate_article_ids) : [],
+    groups: row.groups ? JSON.parse(row.groups) : [],
+  };
+}
+
+export function setDuplicateReview({ active, chatId, candidateArticleIds, groups }) {
+  db.prepare(
+    `UPDATE duplicate_review SET active = ?, chat_id = ?, candidate_article_ids = ?, groups = ?, updated_at = datetime('now') WHERE id = 1`
+  ).run(
+    active ? 1 : 0,
+    chatId ?? null,
+    JSON.stringify(candidateArticleIds ?? []),
+    JSON.stringify(groups ?? [])
+  );
+}
+
+export function getArticlesByIds(ids) {
+  if (!ids || ids.length === 0) return [];
+  const placeholders = ids.map(() => '?').join(',');
+  return db.prepare(`SELECT * FROM articles WHERE id IN (${placeholders})`).all(...ids);
+}
+
 export function getDigest(id) {
   return db.prepare('SELECT * FROM digests WHERE id = ?').get(id);
 }

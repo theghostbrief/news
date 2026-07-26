@@ -4,6 +4,8 @@ import { sendTelegramMessage as sendMessage, answerCallbackQuery, setTelegramWeb
 import { COMPILE_CALLBACK_DATA, KEEP_ADDING_CALLBACK_DATA } from './compile-prompt.js';
 import { triggerFetch } from './content-fetcher.js';
 import { formatStatusReply, recordStatusMessage } from './status-updater.js';
+import { findDuplicateGroups } from './similarity.js';
+import { DUP_CALLBACK_PREFIX, isDuplicateReviewActive, startDuplicateReview, resolveDuplicateCallback } from './duplicate-review.js';
 
 const URL_REGEX = /https?:\/\/[^\s<>"')\]]+/g;
 
@@ -37,13 +39,16 @@ async function handleStatus(botToken, chatId) {
  * Compile all currently-ready articles into a digest. Shared by the
  * "Compile digest" inline-keyboard button and the /compile command — same
  * readiness definition (getNewArticles), same never-compile-empty guard.
- * On completion (success, failure, or nothing to compile) resets the prompt
- * baseline to the current ready count, so the next prompt is counted from
- * here rather than from wherever the last prompt was sent.
+ *
+ * Before actually generating, checks the ready set for suspected near-
+ * duplicate stories (similarity.js). If any are found, compilation is
+ * paused — a Telegram message per suspected group asks which article(s) to
+ * keep, and runCompile() only runs once every group is resolved (see
+ * handleCallbackQuery's DUP_CALLBACK_PREFIX branch). Nothing is ever
+ * dropped without an explicit answer.
  */
 async function handleCompileDigest(botToken, chatId, config) {
-  const { getNewArticles, getDb, setDigestPromptState } = await import('../db/index.js');
-  const { generateDigest } = await import('./digest-generator.js');
+  const { getNewArticles, setDigestPromptState } = await import('../db/index.js');
 
   const count = getReadyArticleCount();
 
@@ -53,21 +58,47 @@ async function handleCompileDigest(botToken, chatId, config) {
     return;
   }
 
-  await sendMessage(botToken, chatId, `⏳ Compiling a digest from ${count} ready articles...`);
+  if (isDuplicateReviewActive()) {
+    await sendMessage(botToken, chatId, '⚠️ A duplicate review is already in progress — resolve it before compiling again.');
+    return;
+  }
+
+  const limit = Math.min(count, config.maxArticlesPerDigest);
+  // Readiness-filtered (status='new', content fetched) — freshly queried
+  // right now, so anything that finished fetching while the prompt was
+  // awaiting a decision is included too.
+  const articles = getNewArticles(limit);
+
+  const threshold = (config.duplicateSimilarityThreshold ?? 40) / 100;
+  const groups = findDuplicateGroups(articles, threshold);
+
+  if (groups.length > 0) {
+    await startDuplicateReview(botToken, chatId, articles, groups);
+    return; // paused — runCompile() runs later, once every group is resolved
+  }
+
+  await runCompile(botToken, chatId, config, articles);
+}
+
+/**
+ * Actually generate the digest from a finalized article list (post duplicate
+ * review, or immediately if there was nothing to review). On completion
+ * (success, failure, or nothing to compile) resets the prompt baseline to
+ * the current ready count, so the next prompt is counted from here rather
+ * than from wherever the last prompt was sent.
+ */
+async function runCompile(botToken, chatId, config, articles) {
+  const { getDb, getDigest, setDigestPromptState } = await import('../db/index.js');
+  const { generateDigest } = await import('./digest-generator.js');
+
+  await sendMessage(botToken, chatId, `⏳ Compiling a digest from ${articles.length} ready articles...`);
 
   try {
-    const limit = Math.min(count, config.maxArticlesPerDigest);
-    // Readiness-filtered (status='new', content fetched) — freshly queried
-    // right now, so anything that finished fetching while the prompt was
-    // awaiting a decision is included too.
-    const articles = getNewArticles(limit);
     const db = getDb();
-
     const digestId = await generateDigest(db, articles, config);
     await sendMessage(botToken, chatId, `✅ Digest compiled (${articles.length} articles). ID: ${digestId}`);
 
     if (config.ntfyTopic) {
-      const { getDigest } = await import('../db/index.js');
       const { notifyDigestReady } = await import('./notifier.js');
       await notifyDigestReady(config.ntfyTopic, getDigest(digestId));
     }
@@ -220,7 +251,8 @@ async function handleUrls(botToken, chatId, messageId, text, config) {
 
 /**
  * Handle a callback_query update — the "Compile digest" / "Keep adding"
- * inline-keyboard buttons on the readiness prompt.
+ * buttons on the readiness prompt, and the "Keep #N" / "Keep both" buttons
+ * on a duplicate-review message.
  */
 async function handleCallbackQuery(callbackQuery, config) {
   const botToken = config.telegramBotToken;
@@ -240,6 +272,16 @@ async function handleCallbackQuery(callbackQuery, config) {
     await handleCompileDigest(botToken, chatId, config);
   } else if (callbackQuery.data === KEEP_ADDING_CALLBACK_DATA) {
     await handleKeepAdding(botToken, chatId);
+  } else if (callbackQuery.data.startsWith(DUP_CALLBACK_PREFIX)) {
+    const result = resolveDuplicateCallback(callbackQuery.data);
+    if (result.resolved === true) {
+      await sendMessage(botToken, chatId, '✅ Duplicate(s) resolved — compiling now.');
+      await runCompile(botToken, chatId, config, result.finalArticles);
+    } else if (result.resolved === false) {
+      await sendMessage(botToken, chatId, '👍 Noted — resolve the remaining suspected duplicate(s) to continue.');
+    }
+    // result.resolved === null: stale/unknown callback (e.g. a button from an
+    // already-completed review) — already acknowledged above, nothing else to do.
   }
 }
 

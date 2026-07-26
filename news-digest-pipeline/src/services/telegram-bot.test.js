@@ -32,10 +32,16 @@ const config = {
 let counter = 0;
 function readyArticle() {
   counter += 1;
+  // Content must be genuinely distinct PER ARTICLE, not just a number
+  // substituted into an otherwise-identical sentence (that still shares
+  // nearly every trigram and would itself get flagged). A per-counter unique
+  // repeated token guarantees zero overlap between different articles while
+  // still clearing findDuplicateGroups()'s minimum-shingle floor, so these
+  // baseline/state tests aren't incidentally exercising duplicate review.
   const { id } = insertArticle({
     url: `https://www.perplexity.ai/discover/you/item-${counter}`,
     title: `Item ${counter}`,
-    content: 'Real fetched body text.'.repeat(5),
+    content: `itemcontent${counter} `.repeat(20).trim(),
     source: 'telegram',
   });
   return id;
@@ -97,6 +103,68 @@ describe('handleCompileDigest via the Compile-digest callback', () => {
 
     expect(generateDigestMock).not.toHaveBeenCalled();
     expect(getDigestPromptState().pending).toBe(0);
+  });
+});
+
+function callbackUpdate(data) {
+  return { callback_query: { id: 'cb-dup', data, message: { chat: { id: 12345 } } } };
+}
+
+describe('handleCompileDigest — duplicate review pauses compile until resolved', () => {
+  it('flags a near-identical pair, waits for a decision, then compiles only the kept article', async () => {
+    const nearDupA = insertArticle({
+      url: 'https://www.perplexity.ai/discover/you/dup-a',
+      title: 'Russian strike kills three in Kharkiv',
+      content:
+        'Russian forces launched a missile strike on a residential building in Kharkiv early Tuesday morning, killing at least three civilians and injuring a dozen more, local officials said. Emergency crews worked through the night to clear rubble from the site.',
+      source: 'telegram',
+    }).id;
+    const nearDupB = insertArticle({
+      url: 'https://www.perplexity.ai/discover/you/dup-b',
+      title: 'Missile hits residential building in Kharkiv, killing three',
+      content:
+        'Russian forces launched a missile strike on a residential building in Kharkiv early Tuesday, killing at least three civilians and injuring a dozen others, officials said. Emergency crews worked overnight to clear rubble from the site.',
+      source: 'telegram',
+    }).id;
+    const distinct = readyArticle();
+
+    generateDigestMock.mockImplementation(async (db, articles) => {
+      const digestId = createDigest({ date: '2026-07-25', articlesCount: articles.length });
+      assignArticlesToDigest(articles.map((a) => a.id), digestId);
+      return digestId;
+    });
+
+    await handleTelegramUpdate(compileCallback(), config);
+
+    // Paused: no digest generated yet, a duplicate-review message went out instead.
+    expect(generateDigestMock).not.toHaveBeenCalled();
+    const sentBodies = fetch.mock.calls.map(([, opts]) => JSON.parse(opts.body));
+    const dupMessage = sentBodies.find((b) => typeof b.text === 'string' && b.text.includes('Possible duplicate story'));
+    expect(dupMessage).toBeDefined();
+    expect(dupMessage.reply_markup.inline_keyboard[0].map((btn) => btn.callback_data)).toEqual(['dup:0:0', 'dup:0:1']);
+
+    // Resolve: keep only the first of the pair.
+    await handleTelegramUpdate(callbackUpdate('dup:0:0'), config);
+
+    expect(generateDigestMock).toHaveBeenCalledTimes(1);
+    const compiledIds = generateDigestMock.mock.calls[0][1].map((a) => a.id).sort();
+    expect(compiledIds).toEqual([distinct, nearDupA].sort());
+    expect(compiledIds).not.toContain(nearDupB);
+  });
+
+  it('proceeds immediately with no extra message when nothing is flagged', async () => {
+    Array.from({ length: 3 }, () => readyArticle());
+    generateDigestMock.mockImplementation(async (db, articles) => {
+      const digestId = createDigest({ date: '2026-07-25', articlesCount: articles.length });
+      assignArticlesToDigest(articles.map((a) => a.id), digestId);
+      return digestId;
+    });
+
+    await handleTelegramUpdate(compileCallback(), config);
+
+    expect(generateDigestMock).toHaveBeenCalledTimes(1);
+    const sentBodies = fetch.mock.calls.map(([, opts]) => JSON.parse(opts.body));
+    expect(sentBodies.some((b) => typeof b.text === 'string' && b.text.includes('duplicate'))).toBe(false);
   });
 });
 

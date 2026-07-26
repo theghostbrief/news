@@ -155,6 +155,13 @@ function buildConfig() {
     // Ready-article batch size for the interactive Telegram compile prompt
     // (queue-manager.js) — fires every ARTICLE_THRESHOLD ready articles.
     articleThreshold: parseInt(process.env.ARTICLE_THRESHOLD || '10', 10),
+    // Word-trigram Jaccard threshold (0-100, as a percentage) for flagging two
+    // ready articles as a suspected duplicate story at compile time — see
+    // similarity.js. Deliberately conservative default: empirically, genuinely
+    // distinct same-topic articles score ~0, while realistic wire-syndicated
+    // near-duplicates score ~0.4-0.5, so 40 sits with a wide safety margin
+    // above coincidental overlap while still catching real duplicates.
+    duplicateSimilarityThreshold: parseInt(process.env.DUPLICATE_SIMILARITY_THRESHOLD || '40', 10),
     maxArticlesPerDigest: parseInt(process.env.MAX_ARTICLES_PER_DIGEST || '17', 10),
     checkIntervalMs: parseInt(process.env.CHECK_INTERVAL_MS || '60000', 10),
     nodeEnv: process.env.NODE_ENV || 'development',

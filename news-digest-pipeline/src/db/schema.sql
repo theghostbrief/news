@@ -53,6 +53,26 @@ CREATE TABLE IF NOT EXISTS digest_prompt_state (
 );
 INSERT OR IGNORE INTO digest_prompt_state (id, pending, baseline) VALUES (1, 0, 0);
 
+-- Singleton row tracking an in-progress compile-time duplicate review. Only
+-- one compile action can be paused mid-review at a time (single admin,
+-- explicit user action) — a new handleCompileDigest() call while active=1
+-- refuses to start a second review rather than clobbering this one.
+-- candidate_article_ids: JSON array — the full ready-set snapshot for this
+--   compile attempt, frozen at review-start time.
+-- groups: JSON array of { articleIds: [...], keepArticleIds: [...] | null } —
+--   one entry per suspected-duplicate cluster; keepArticleIds is null until
+--   that group's Telegram buttons are answered. Compile runs automatically
+--   once every group has a non-null keepArticleIds.
+CREATE TABLE IF NOT EXISTS duplicate_review (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  active INTEGER NOT NULL DEFAULT 0,
+  chat_id TEXT,
+  candidate_article_ids TEXT,
+  groups TEXT,
+  updated_at TEXT DEFAULT (datetime('now'))
+);
+INSERT OR IGNORE INTO duplicate_review (id, active) VALUES (1, 0);
+
 -- NOTE: source_posts (the FB-Syndication contract table) is intentionally NOT
 -- defined here. It belongs to the optional pro cluster, which creates it
 -- idempotently at startup (src/pro/db/source-posts.js migrateSourcePosts()).

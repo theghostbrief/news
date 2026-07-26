@@ -782,6 +782,11 @@
               <input type="number" id="f-checkIntervalMs" min="5000" max="3600000" step="1000" value="${esc(q.checkIntervalMs.value)}">
               <div class="hint">${esc(q.checkIntervalMs.note || '')} (5000–3600000)</div>
             </div>
+            <div class="field">
+              <label>Duplicate similarity threshold, % (DUPLICATE_SIMILARITY_THRESHOLD)</label>
+              <input type="number" id="f-duplicateSimilarityThreshold" min="0" max="100" value="${esc(q.duplicateSimilarityThreshold.value)}">
+              <div class="hint">Word-overlap % above which two ready articles are flagged as a possible duplicate story at compile time — never auto-dropped, always asks first (0–100, higher = stricter/fewer flags)</div>
+            </div>
             ${saveBar('queue')}
           </div>`;
       } else if (active === 'content') {
@@ -1001,6 +1006,7 @@
           articleThreshold: parseInt(document.getElementById('f-articleThreshold').value, 10),
           maxArticlesPerDigest: parseInt(document.getElementById('f-maxArticlesPerDigest').value, 10),
           checkIntervalMs: parseInt(document.getElementById('f-checkIntervalMs').value, 10),
+          duplicateSimilarityThreshold: parseInt(document.getElementById('f-duplicateSimilarityThreshold').value, 10),
         };
       }
       if (id === 'commentary')     return { commentary:     { text: document.getElementById('ta-commentary').value } };

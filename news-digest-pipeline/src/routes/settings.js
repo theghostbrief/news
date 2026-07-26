@@ -18,6 +18,7 @@ const ENV_WRITABLE = {
   openaiBaseUrl: 'OPENAI_BASE_URL',
   openaiReasoningEffort: 'OPENAI_REASONING_EFFORT',
   articleThreshold: 'ARTICLE_THRESHOLD',
+  duplicateSimilarityThreshold: 'DUPLICATE_SIMILARITY_THRESHOLD',
   maxArticlesPerDigest: 'MAX_ARTICLES_PER_DIGEST',
   checkIntervalMs: 'CHECK_INTERVAL_MS',
   activeScenario: 'ACTIVE_SCENARIO',
@@ -105,6 +106,7 @@ function buildSettingsPayload() {
     },
     queue: {
       articleThreshold: { value: config.articleThreshold, editable: true },
+      duplicateSimilarityThreshold: { value: config.duplicateSimilarityThreshold, editable: true },
       maxArticlesPerDigest: { value: config.maxArticlesPerDigest, editable: true },
       checkIntervalMs: {
         value: config.checkIntervalMs,
@@ -338,6 +340,7 @@ function validatePatch(body) {
   };
 
   intField('articleThreshold', 1, 100);
+  intField('duplicateSimilarityThreshold', 0, 100);
   intField('maxArticlesPerDigest', 1, 100);
   intField('checkIntervalMs', 5000, 3600000);
 
