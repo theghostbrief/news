@@ -61,6 +61,32 @@ export function initDb(dbPath) {
   if (!digestCols.has('facebook_error')) {
     db.exec('ALTER TABLE digests ADD COLUMN facebook_error TEXT');
   }
+  if (!digestCols.has('threads_status')) {
+    // 'published' | 'failed' | NULL (never attempted) — same contract as
+    // facebook_status: only 'published' when the FULL 4-post chain (lead +
+    // 2 replies + closing link) succeeded, never on a partial chain.
+    db.exec('ALTER TABLE digests ADD COLUMN threads_status TEXT');
+  }
+  if (!digestCols.has('threads_error')) {
+    db.exec('ALTER TABLE digests ADD COLUMN threads_error TEXT');
+  }
+  if (!digestCols.has('threads_thread_ids')) {
+    // JSON array of however many post ids the chain reached before stopping
+    // (0-4 entries) — same idea as duplicate_review.groups: JSON in a TEXT column.
+    db.exec('ALTER TABLE digests ADD COLUMN threads_thread_ids TEXT');
+  }
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS threads_token_state (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      access_token TEXT,
+      refreshed_at TEXT,
+      expires_at TEXT,
+      last_error TEXT,
+      updated_at TEXT DEFAULT (datetime('now'))
+    )
+  `);
+  db.prepare('INSERT OR IGNORE INTO threads_token_state (id) VALUES (1)').run();
 
   return db;
 }
@@ -180,7 +206,8 @@ export function createDigest({ date, part = 1, articlesCount = 0 }) {
 export function updateDigest(id, fields) {
   const allowed = ['content', 'status', 'generation_log', 'published_at',
     'facebook_post_id', 'facebook_status', 'facebook_error', 'telegram_message_id', 'youtube_post_id', 'articles_count',
-    'model', 'input_tokens', 'output_tokens', 'cost_usd', 'script_warning'];
+    'model', 'input_tokens', 'output_tokens', 'cost_usd', 'script_warning',
+    'threads_status', 'threads_error', 'threads_thread_ids'];
   const updates = [];
   const values = [];
 
@@ -219,6 +246,28 @@ export function setDigestPromptState(fields) {
 
   updates.push(`updated_at = datetime('now')`);
   db.prepare(`UPDATE digest_prompt_state SET ${updates.join(', ')} WHERE id = 1`).run(...values);
+}
+
+export function getThreadsTokenState() {
+  return db.prepare('SELECT * FROM threads_token_state WHERE id = 1').get();
+}
+
+export function setThreadsTokenState(fields) {
+  const allowed = ['access_token', 'refreshed_at', 'expires_at', 'last_error'];
+  const updates = [];
+  const values = [];
+
+  for (const [key, value] of Object.entries(fields)) {
+    if (allowed.includes(key)) {
+      updates.push(`${key} = ?`);
+      values.push(value);
+    }
+  }
+
+  if (updates.length === 0) return;
+
+  updates.push(`updated_at = datetime('now')`);
+  db.prepare(`UPDATE threads_token_state SET ${updates.join(', ')} WHERE id = 1`).run(...values);
 }
 
 export function getDuplicateReview() {

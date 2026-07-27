@@ -145,6 +145,12 @@ function buildSettingsPayload() {
         pageId: maskSecret(config.facebookPageId),
         pageAccessToken: maskSecret(config.facebookPageAccessToken),
       },
+      threads: {
+        userId: maskSecret(config.threadsUserId),
+        accessToken: maskSecret(config.threadsAccessToken),
+        linkText: config.threadsLinkText,
+        linkUrl: config.threadsLinkUrl || null,
+      },
       anthropicApiKey: maskSecret(config.anthropicApiKey),
       openaiApiKey: maskSecret(config.openaiApiKey),
       falKey: maskSecret(config.falKey),

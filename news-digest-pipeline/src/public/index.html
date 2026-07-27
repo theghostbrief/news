@@ -629,8 +629,18 @@
             ? `<button class="plat-btn sent" disabled>✓ FB</button>`
             : `<button class="plat-btn${fbFailed ? ' failed' : ''}" onclick="publishPlatform('${d.id}','facebook',this)" title="${fbFailed ? esc(d.facebook_error || 'Facebook publish failed') : ''}">${fbFailed ? '✗ FB' : '📘 FB'}</button>`;
 
+          // "Sent" = the full 4-post chain succeeded, mirroring threads_status
+          // never being 'published' on a partial chain (publishers/index.js).
+          let threadsIds = [];
+          try { threadsIds = d.threads_thread_ids ? JSON.parse(d.threads_thread_ids) : []; } catch { threadsIds = []; }
+          const threadsSent = threadsIds.length === 4;
+          const threadsFailed = !threadsSent && d.threads_status === 'failed';
+          const threadsBtn = threadsSent
+            ? `<button class="plat-btn sent" disabled>✓ Threads</button>`
+            : `<button class="plat-btn${threadsFailed ? ' failed' : ''}" onclick="publishPlatform('${d.id}','threads',this)" title="${threadsFailed ? esc(d.threads_error || 'Threads publish failed') : ''}">${threadsFailed ? '✗ Threads' : '🧵 Threads'}</button>`;
+
           const delBtn = `<button class="btn-delete" onclick="deleteDigest('${d.id}')">✕</button>`;
-          actionBtn = `<div class="platform-row"><button class="btn btn-preview" onclick="previewDigest('${d.id}')">&#128065;</button>${tgBtn}${fbBtn}<button class="btn btn-copy" onclick="copyDigest('${d.id}', this)">&#128203;</button>${delBtn}</div>`;
+          actionBtn = `<div class="platform-row"><button class="btn btn-preview" onclick="previewDigest('${d.id}')">&#128065;</button>${tgBtn}${fbBtn}${threadsBtn}<button class="btn btn-copy" onclick="copyDigest('${d.id}', this)">&#128203;</button>${delBtn}</div>`;
         }
 
         // Status dropdown
@@ -700,7 +710,9 @@
     }
 
     async function publishPlatform(id, platform, btn) {
-      const names = { telegram: 'Telegram', facebook: 'Facebook' };
+      const names = { telegram: 'Telegram', facebook: 'Facebook', threads: 'Threads' };
+      const idleLabel = { telegram: '📨 TG', facebook: '📘 FB', threads: '🧵 Threads' };
+      const sentLabel = { telegram: '✓ TG', facebook: '✓ FB', threads: '✓ Threads' };
       if (!confirm('Publish to ' + names[platform] + '?')) return;
       btn.disabled = true;
       btn.textContent = '⏳...';
@@ -714,22 +726,26 @@
         if (!res.ok) throw new Error(data.error || 'Server error');
 
         const result = data.published?.[platform];
-        if (result?.postId || result?.messageId) {
+        // Threads success = the full 4-post reply chain, not just "some id came back".
+        const succeeded = platform === 'threads'
+          ? (result?.threadIds?.length === 4 && !result?.error)
+          : (result?.postId || result?.messageId);
+        if (succeeded) {
           btn.className = 'plat-btn sent';
-          btn.textContent = '✓ ' + (platform === 'telegram' ? 'TG' : 'FB');
+          btn.textContent = sentLabel[platform];
           btn.onclick = null;
         } else {
           const detail = result?.error || 'Check the token.';
           alert(names[platform] + ' publish failed: ' + detail);
           btn.disabled = false;
-          btn.textContent = (platform === 'telegram' ? '📨 TG' : '📘 FB');
+          btn.textContent = idleLabel[platform];
         }
         setTimeout(loadDigests, 500);
       } catch (err) {
         console.error('Publish failed:', err);
         alert('Error: ' + err.message);
         btn.disabled = false;
-        btn.textContent = (platform === 'telegram' ? '📨 TG' : '📘 FB');
+        btn.textContent = idleLabel[platform];
       }
     }
 

@@ -15,6 +15,7 @@ import authRouter from './routes/auth.js';
 import { loadPro } from './pro-loader.js';
 import { startQueueManager } from './services/queue-manager.js';
 import { startContentFetcher } from './services/content-fetcher.js';
+import { startThreadsTokenRefreshScheduler } from './services/publishers/threads-token-refresh.js';
 import { setupTelegramBot } from './services/telegram-bot.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -167,12 +168,14 @@ app.use('/api/digests', digestsRouter);
 // Start queue manager + background content fetcher
 const queueInterval = startQueueManager(config);
 const contentFetchInterval = startContentFetcher(config);
+const threadsTokenRefreshInterval = startThreadsTokenRefreshScheduler(config);
 
 // Graceful shutdown
 process.on('SIGINT', () => {
   console.log('\n[shutdown] Stopping...');
   clearInterval(queueInterval);
   clearInterval(contentFetchInterval);
+  clearInterval(threadsTokenRefreshInterval);
   process.exit(0);
 });
 
@@ -180,6 +183,7 @@ process.on('SIGTERM', () => {
   console.log('[shutdown] Stopping...');
   clearInterval(queueInterval);
   clearInterval(contentFetchInterval);
+  clearInterval(threadsTokenRefreshInterval);
   process.exit(0);
 });
 

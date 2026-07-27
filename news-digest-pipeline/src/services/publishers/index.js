@@ -1,6 +1,7 @@
 import { publishToFacebook } from './facebook.js';
 import { publishToTelegram } from './telegram.js';
 import { publishToYouTube } from './youtube.js';
+import { publishThreadsChain } from './threads-publisher.js';
 import { updateDigest } from '../../db/index.js';
 
 /**
@@ -8,8 +9,8 @@ import { updateDigest } from '../../db/index.js';
  *
  * @param {Object} digest     - Digest record from DB (must have id and content)
  * @param {Object} config     - App config object
- * @param {string[]} platforms - Optional: ["telegram", "facebook", "youtube"]. If omitted, publishes to all enabled.
- * @returns {{ facebook, telegram, youtube }} results per platform (or null if skipped)
+ * @param {string[]} platforms - Optional: ["telegram", "facebook", "youtube", "threads"]. If omitted, publishes to all enabled.
+ * @returns {{ facebook, telegram, youtube, threads }} results per platform (or null if skipped)
  */
 export async function publishDigest(digest, config, platforms) {
   const all = !platforms || !Array.isArray(platforms) || platforms.length === 0;
@@ -19,6 +20,7 @@ export async function publishDigest(digest, config, platforms) {
     facebook: null,
     telegram: null,
     youtube: null,
+    threads: null,
   };
 
   const updateFields = {};
@@ -75,11 +77,33 @@ export async function publishDigest(digest, config, platforms) {
     }
   }
 
+  // Threads — mirrors the Facebook pattern (§11.4 media-pipeline-spec.md):
+  // 'published' only on a FULL 4-post chain (lead + 2 replies + closing),
+  // never on a partial chain that stopped partway through.
+  if (shouldPublish('threads') && config.threadsUserId && config.threadsAccessToken) {
+    try {
+      results.threads = await publishThreadsChain(digest, config);
+    } catch (err) {
+      console.error('[publishers] Unexpected Threads publish error:', err.message);
+      results.threads = { threadIds: [], error: `Unexpected error: ${err.message}` };
+    }
+
+    updateFields.threads_thread_ids = JSON.stringify(results.threads?.threadIds || []);
+    if (results.threads?.threadIds?.length === 4 && !results.threads.error) {
+      updateFields.threads_status = 'published';
+      updateFields.threads_error = null;
+    } else {
+      updateFields.threads_status = 'failed';
+      updateFields.threads_error = results.threads?.error || 'Unknown Threads publish failure';
+    }
+  }
+
   // A genuine success (not just facebook_status/facebook_error bookkeeping)
   // is what flips the digest to 'published' — a Facebook failure alone must
   // not mark the digest as published.
   const hasGenuineSuccess = Boolean(
-    updateFields.facebook_post_id || updateFields.telegram_message_id || updateFields.youtube_post_id
+    updateFields.facebook_post_id || updateFields.telegram_message_id || updateFields.youtube_post_id ||
+    updateFields.threads_status === 'published'
   );
   if (hasGenuineSuccess) {
     updateFields.status = 'published';

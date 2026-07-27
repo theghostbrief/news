@@ -35,6 +35,9 @@ CREATE TABLE IF NOT EXISTS digests (
   facebook_error TEXT,
   telegram_message_id TEXT,
   youtube_post_id TEXT,
+  threads_status TEXT,
+  threads_error TEXT,
+  threads_thread_ids TEXT,
   created_at TEXT DEFAULT (datetime('now')),
   updated_at TEXT DEFAULT (datetime('now'))
 );
@@ -72,6 +75,23 @@ CREATE TABLE IF NOT EXISTS duplicate_review (
   updated_at TEXT DEFAULT (datetime('now'))
 );
 INSERT OR IGNORE INTO duplicate_review (id, active) VALUES (1, 0);
+
+-- Singleton row tracking the current Threads long-lived access token once it
+-- has been auto-refreshed at least once. access_token is NULL until the first
+-- successful refresh — until then, threads-publisher.js uses the .env value
+-- (THREADS_ACCESS_TOKEN) directly. Refreshing writes the new token here rather
+-- than back into .env (which is edited manually over SSH only, per project
+-- convention) so the app keeps working across restarts without touching the
+-- gitignored env file.
+CREATE TABLE IF NOT EXISTS threads_token_state (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  access_token TEXT,
+  refreshed_at TEXT,
+  expires_at TEXT,
+  last_error TEXT,
+  updated_at TEXT DEFAULT (datetime('now'))
+);
+INSERT OR IGNORE INTO threads_token_state (id) VALUES (1);
 
 -- NOTE: source_posts (the FB-Syndication contract table) is intentionally NOT
 -- defined here. It belongs to the optional pro cluster, which creates it
