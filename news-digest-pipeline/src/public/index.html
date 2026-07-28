@@ -764,11 +764,20 @@
     // <!--TOP3--> machine-readable markers (for the future segmenter — see
     // media-pipeline-spec.md §5.1) untouched. This just hides them from the
     // human-facing preview; copy/publish/API responses are unaffected.
+    //
+    // IMPORTANT: mirrors src/services/digest-format.js's stripDigestMarkers()
+    // — an explicit allowlist of patterns, not a general HTML-comment
+    // stripper. Any NEW <!--MARKER...--> added to the assembly prompt (like
+    // THREADS was, and it was missed here until 2026-07-28) must be added to
+    // BOTH this list and the server copy, or it leaks into what gets shown/
+    // published. Consider later (not now) collapsing this into one general
+    // <!--[\s\S]*?--> strip so a forgotten marker can't leak by construction.
     function stripDigestMarkers(text) {
       return text
         .replace(/<!--SEG.*?-->\n?/g, '')
         .replace(/<!--\/SEG-->\n?/g, '')
         .replace(/<!--TOP3.*?-->\n?/g, '')
+        .replace(/<!--THREADS.*?-->\n?/g, '')
         .replace(/\n{3,}/g, '\n\n');
     }
 

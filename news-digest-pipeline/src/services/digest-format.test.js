@@ -17,17 +17,21 @@ Ghost's read: pattern sentence.
 
 <!--TOP3 [1,2]-->
 
+<!--THREADS idx=1 text="Short Threads-native take for item 1."-->
+<!--THREADS idx=2 text="Short Threads-native take for item 2."-->
+
 The Ghost Brief — daily defense & security digest. Full brief: theghostbrief.com
 
 #GhostBrief #defense #OSINT
 `;
 
 describe('stripDigestMarkers', () => {
-  it('removes SEG open/close tags and the TOP3 line', () => {
+  it('removes SEG open/close tags, the TOP3 line, and the THREADS lines', () => {
     const out = stripDigestMarkers(SAMPLE);
     expect(out).not.toMatch(/<!--SEG/);
     expect(out).not.toMatch(/<!--\/SEG-->/);
     expect(out).not.toMatch(/<!--TOP3/);
+    expect(out).not.toMatch(/<!--THREADS/);
   });
 
   it('keeps the actual commentary, links, and footer intact', () => {
