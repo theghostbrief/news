@@ -154,7 +154,16 @@ describe('Jina abuse-block retry (perplexity.ai, jinaReaderFallback: true)', () 
 
   it('retries a due retry_scheduled article on the next fetch pass and clears retry fields on success', async () => {
     const { id } = insertArticle({ url: 'https://www.perplexity.ai/discover/top/v', title: '', content: '', source: 'telegram' });
-    getDb().prepare(`UPDATE articles SET status = 'retry_scheduled', retry_count = 1, retry_after = datetime('now', '-1 minute') WHERE id = ?`).run(id);
+    // Seed retry_after in the SAME format the real write path produces
+    // (ISO8601 via toISOString(), computeAbuseRetryAfter/markArticleRetryScheduled)
+    // — NOT SQLite's own datetime('now', ...) format. Using the SQLite-native
+    // format here previously masked a real bug: a bare string comparison
+    // between an ISO8601 value ("...T...Z") and datetime('now')'s
+    // space-separated output is never true regardless of actual time, so a
+    // due retry never actually fired (caught live 2026-07-28). This seed
+    // format is what makes this test exercise that comparison for real.
+    const pastRetryAfter = new Date(Date.now() - 60 * 1000).toISOString();
+    getDb().prepare(`UPDATE articles SET status = 'retry_scheduled', retry_count = 1, retry_after = ? WHERE id = ?`).run(pastRetryAfter, id);
     fetchViaJinaReaderMock.mockResolvedValueOnce({ title: 'Recovered', content: 'x'.repeat(300) });
 
     triggerFetch(jinaConfig);

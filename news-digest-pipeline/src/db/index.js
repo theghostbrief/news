@@ -177,10 +177,18 @@ export function updateArticleStatus(id, status) {
 // retries (or hit a non-retryable error) and are waiting on a manual paste
 // via the dashboard, not another automatic retry.
 export function getArticlesNeedingFetch(limit = 5) {
+  // retry_after is stored as an ISO8601 string (new Date().toISOString(), e.g.
+  // "2026-07-28T08:19:33.000Z") — SQLite's datetime('now') returns its own
+  // space-separated, no-'Z' format ("2026-07-28 08:19:33"). A bare string
+  // comparison between the two is WRONG: 'T' (0x54) sorts after ' ' (0x20),
+  // so retry_after <= datetime('now') is false for every row regardless of
+  // actual time (caught live 2026-07-28 — a scheduled retry never fired even
+  // 4 minutes past its due time). Wrapping retry_after in datetime(...) too
+  // normalizes it to the same comparable format first.
   return db.prepare(
     `SELECT * FROM articles
      WHERE (status = 'new' AND (content IS NULL OR content = ''))
-        OR (status = 'retry_scheduled' AND retry_after <= datetime('now'))
+        OR (status = 'retry_scheduled' AND datetime(retry_after) <= datetime('now'))
      ORDER BY created_at ASC LIMIT ?`
   ).all(limit);
 }
