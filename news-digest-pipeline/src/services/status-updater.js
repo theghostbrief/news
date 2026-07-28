@@ -1,5 +1,5 @@
 import { editMessageText } from './telegram-api.js';
-import { getReadyArticleCount, getFetchingArticleCount } from '../db/index.js';
+import { getReadyArticleCount, getFetchingArticleCount, getRetryingArticleCount } from '../db/index.js';
 
 // Coalesce a burst of fetch completions into one edit per window, so a batch
 // of articles landing close together can't trip Telegram's rate limit.
@@ -16,8 +16,10 @@ let pendingConfig = null;
  * Build the status reply text. Shared by the initial send (telegram-bot.js)
  * and every later live edit, so the two can never drift out of format.
  */
-export function formatStatusReply({ saved, duplicates, rejected, readyCount, fetchingCount }) {
-  let text = `Saved: ${saved} | Ready: ${readyCount} | Fetching: ${fetchingCount}`;
+export function formatStatusReply({ saved, duplicates, rejected, readyCount, fetchingCount, retryingCount }) {
+  // Retrying shown unconditionally, same as Ready/Fetching — a Jina-blocked
+  // article must never look like it silently vanished from both of those.
+  let text = `Saved: ${saved} | Ready: ${readyCount} | Fetching: ${fetchingCount} | Retrying: ${retryingCount ?? 0}`;
   if (duplicates > 0) text += ` | Duplicates: ${duplicates}`;
   if (rejected > 0) text += ` | Rejected: ${rejected}`;
   return text;
@@ -41,7 +43,8 @@ async function flushStatusUpdate() {
 
   const readyCount = getReadyArticleCount();
   const fetchingCount = getFetchingArticleCount();
-  const text = formatStatusReply({ ...target, readyCount, fetchingCount });
+  const retryingCount = getRetryingArticleCount();
+  const text = formatStatusReply({ ...target, readyCount, fetchingCount, retryingCount });
   await editMessageText(config.telegramBotToken, target.chatId, target.messageId, text);
 }
 

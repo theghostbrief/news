@@ -10,6 +10,8 @@ CREATE TABLE IF NOT EXISTS articles (
   fetch_error TEXT,
   source_chat_id TEXT,
   source_message_id TEXT,
+  retry_count INTEGER DEFAULT 0,
+  retry_after TEXT,
   created_at TEXT DEFAULT (datetime('now')),
   updated_at TEXT DEFAULT (datetime('now')),
   FOREIGN KEY (digest_id) REFERENCES digests(id)

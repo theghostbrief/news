@@ -155,6 +155,7 @@ router.get('/stats', (req, res) => {
     res.json({
       new: getArticleCount('new'),
       processing: getArticleCount('processing'),
+      retry_scheduled: getArticleCount('retry_scheduled'),
       used: getArticleCount('used'),
       error: getArticleCount('error'),
       fetch_failed: getArticleCount('fetch_failed'),

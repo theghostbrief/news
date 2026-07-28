@@ -6,6 +6,27 @@ const JINA_READER_PREFIX = 'https://r.jina.ai/';
 const TIMEOUT_MS = 20000;
 const MAX_BYTES = 5 * 1024 * 1024;
 
+// Matches Jina's "blocked until <timestamp>" phrasing in an AbuseAlleviationError
+// message, e.g. "...blocked until Tue Jul 28 2026 08:17:33 GMT+0000 (Coordinated...".
+// The captured group is exactly the format Date's own toString() produces (minus
+// the trailing zone-name parenthetical), which `new Date(...)` parses natively.
+const BLOCKED_UNTIL_RE = /blocked until ([A-Za-z]{3} [A-Za-z]{3} \d{1,2} \d{4} \d{2}:\d{2}:\d{2} GMT[+-]\d{4})/;
+
+/**
+ * Jina's transient, domain-wide anti-abuse block (confirmed live 2026-07-28
+ * against perplexity.ai: "AbuseAlleviationError", status 40305) — NOT a real
+ * 403 from the target site, and not permanent: the response carries its own
+ * expiry timestamp. content-fetcher.js schedules a backoff retry for this
+ * specific error instead of failing the article permanently.
+ */
+export class JinaAbuseBlockError extends Error {
+  constructor(message, blockedUntil) {
+    super(message);
+    this.name = 'JinaAbuseBlockError';
+    this.blockedUntil = blockedUntil; // Date | null — null if the timestamp didn't parse
+  }
+}
+
 /**
  * Fetch article content via Jina Reader (https://r.jina.ai/<url>), a free
  * third-party proxy that renders the target page server-side (including
@@ -26,6 +47,23 @@ export async function fetchViaJinaReader(articleUrl) {
     signal: AbortSignal.timeout(TIMEOUT_MS),
   });
   if (!response.ok) {
+    const raw = await response.text().catch(() => '');
+    let data = null;
+    try {
+      data = JSON.parse(raw);
+    } catch {
+      // Not a JSON error body — fall through to the generic error below.
+    }
+
+    if (data && (data.name === 'AbuseAlleviationError' || data.status === 40305)) {
+      const match = typeof data.message === 'string' ? data.message.match(BLOCKED_UNTIL_RE) : null;
+      const blockedUntil = match ? new Date(match[1]) : null;
+      throw new JinaAbuseBlockError(
+        data.message || `Jina Reader abuse-block (HTTP ${response.status}) for ${articleUrl}`,
+        blockedUntil && !isNaN(blockedUntil) ? blockedUntil : null
+      );
+    }
+
     throw new Error(`Jina Reader HTTP ${response.status} for ${articleUrl}`);
   }
 

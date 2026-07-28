@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import { extractFromJinaMarkdown } from './jina-reader.js';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { extractFromJinaMarkdown, fetchViaJinaReader, JinaAbuseBlockError } from './jina-reader.js';
 
 // Trimmed fixture mirroring a real Jina Reader dump of a perplexity.ai/page/
 // URL (captured 2026-07-22): nav chrome, then the real article (H2 title +
@@ -81,5 +81,68 @@ describe('extractFromJinaMarkdown', () => {
 
   it('throws when the extracted body is too short', () => {
     expect(() => extractFromJinaMarkdown('## Title\n\nToo short.\n\nDiscover more\nrest')).toThrow(/Insufficient/);
+  });
+});
+
+function jsonResponse(body, status) {
+  return { ok: false, status, text: async () => JSON.stringify(body) };
+}
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
+describe('fetchViaJinaReader — AbuseAlleviationError detection', () => {
+  const ABUSE_BODY = {
+    data: null,
+    code: 403,
+    name: 'AbuseAlleviationError',
+    status: 40305,
+    message: 'Anonymous access to domain www.perplexity.ai blocked until Tue Jul 28 2026 08:17:33 GMT+0000 (Coordinated Universal Time) due to previous abuse found on https://www.perplexity.ai/finance/AMZN: DDoS attack suspected: Too many requests',
+  };
+
+  it('throws JinaAbuseBlockError with a parsed blockedUntil date for a real AbuseAlleviationError body', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(jsonResponse(ABUSE_BODY, 403)));
+
+    await expect(fetchViaJinaReader('https://www.perplexity.ai/discover/top/x'))
+      .rejects.toBeInstanceOf(JinaAbuseBlockError);
+
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(jsonResponse(ABUSE_BODY, 403)));
+    try {
+      await fetchViaJinaReader('https://www.perplexity.ai/discover/top/x');
+      expect.unreachable();
+    } catch (err) {
+      expect(err.blockedUntil).toBeInstanceOf(Date);
+      expect(err.blockedUntil.toISOString()).toBe('2026-07-28T08:17:33.000Z');
+    }
+  });
+
+  it('sets blockedUntil to null when the message has no parseable timestamp', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(
+      jsonResponse({ name: 'AbuseAlleviationError', status: 40305, message: 'blocked, no timestamp here' }, 403)
+    ));
+
+    try {
+      await fetchViaJinaReader('https://www.perplexity.ai/discover/top/x');
+      expect.unreachable();
+    } catch (err) {
+      expect(err).toBeInstanceOf(JinaAbuseBlockError);
+      expect(err.blockedUntil).toBeNull();
+    }
+  });
+
+  it('throws a plain Error (not JinaAbuseBlockError) for a real 403 that is not an abuse block', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(jsonResponse({ name: 'SecurityCompromiseError' }, 403)));
+
+    await expect(fetchViaJinaReader('https://example.com/x'))
+      .rejects.toThrow(/Jina Reader HTTP 403/);
+  });
+
+  it('throws a plain Error when the error body is not JSON at all', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce({ ok: false, status: 500, text: async () => '<html>oops</html>' }));
+
+    const err = await fetchViaJinaReader('https://example.com/x').catch((e) => e);
+    expect(err).not.toBeInstanceOf(JinaAbuseBlockError);
+    expect(err.message).toMatch(/Jina Reader HTTP 500/);
   });
 });

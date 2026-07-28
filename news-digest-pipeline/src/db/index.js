@@ -24,6 +24,13 @@ export function initDb(dbPath) {
   if (!articleCols.has('source_message_id')) {
     db.exec('ALTER TABLE articles ADD COLUMN source_message_id TEXT');
   }
+  if (!articleCols.has('retry_count')) {
+    // Jina abuse-block backoff (status='retry_scheduled') — see content-fetcher.js.
+    db.exec('ALTER TABLE articles ADD COLUMN retry_count INTEGER DEFAULT 0');
+  }
+  if (!articleCols.has('retry_after')) {
+    db.exec('ALTER TABLE articles ADD COLUMN retry_after TEXT');
+  }
 
   // Token accounting + cost columns on digests (idempotent)
   const digestCols = new Set(db.prepare('PRAGMA table_info(digests)').all().map((c) => c.name));
@@ -140,6 +147,16 @@ export function getFetchingArticleCount() {
   ).get().count;
 }
 
+// Articles waiting out a Jina abuse-block backoff (status='retry_scheduled'),
+// regardless of whether retry_after has elapsed yet — shown as its own count
+// (not folded into Ready or Fetching) so a Jina-blocked paste visibly reads
+// as queued rather than silently vanishing from both existing counts.
+export function getRetryingArticleCount() {
+  return db.prepare(
+    `SELECT COUNT(*) as count FROM articles WHERE status = 'retry_scheduled'`
+  ).get().count;
+}
+
 export function getArticleCount(status) {
   if (status) {
     return db.prepare('SELECT COUNT(*) as count FROM articles WHERE status = ?').get(status).count;
@@ -154,18 +171,24 @@ export function updateArticleStatus(id, status) {
 }
 
 // Articles saved without content (e.g. via Telegram) that the background
-// content-fetcher hasn't picked up yet. Deliberately excludes 'fetch_failed'
-// rows — those already had a fetch attempt and are waiting on a manual paste
+// content-fetcher hasn't picked up yet, PLUS 'retry_scheduled' articles whose
+// backoff has elapsed (Jina abuse-block retry — see content-fetcher.js).
+// Deliberately excludes 'fetch_failed' rows — those already exhausted their
+// retries (or hit a non-retryable error) and are waiting on a manual paste
 // via the dashboard, not another automatic retry.
 export function getArticlesNeedingFetch(limit = 5) {
   return db.prepare(
-    `SELECT * FROM articles WHERE status = 'new' AND (content IS NULL OR content = '') ORDER BY created_at ASC LIMIT ?`
+    `SELECT * FROM articles
+     WHERE (status = 'new' AND (content IS NULL OR content = ''))
+        OR (status = 'retry_scheduled' AND retry_after <= datetime('now'))
+     ORDER BY created_at ASC LIMIT ?`
   ).all(limit);
 }
 
 export function markArticleFetched(id, { title, content }) {
   db.prepare(
-    `UPDATE articles SET title = ?, content = ?, fetch_error = NULL, status = 'new', updated_at = datetime('now') WHERE id = ?`
+    `UPDATE articles SET title = ?, content = ?, fetch_error = NULL, status = 'new',
+     retry_count = 0, retry_after = NULL, updated_at = datetime('now') WHERE id = ?`
   ).run(title || null, content, id);
 }
 
@@ -173,6 +196,15 @@ export function markArticleFetchFailed(id, errorMessage) {
   db.prepare(
     `UPDATE articles SET status = 'fetch_failed', fetch_error = ?, updated_at = datetime('now') WHERE id = ?`
   ).run(errorMessage, id);
+}
+
+// Jina abuse-block retry, still under the attempt cap: not a failure, a
+// scheduled retry. retryAfter is an ISO datetime string; getArticlesNeedingFetch()
+// picks the row back up once it elapses.
+export function markArticleRetryScheduled(id, { retryAfter, errorMessage, retryCount }) {
+  db.prepare(
+    `UPDATE articles SET status = 'retry_scheduled', fetch_error = ?, retry_after = ?, retry_count = ?, updated_at = datetime('now') WHERE id = ?`
+  ).run(errorMessage, retryAfter, retryCount, id);
 }
 
 export function updateArticleCommentary(id, commentary) {

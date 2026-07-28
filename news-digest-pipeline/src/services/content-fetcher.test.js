@@ -10,8 +10,15 @@ vi.mock('./compile-prompt.js', () => ({
   sendCompilePrompt: sendCompilePromptMock,
 }));
 
-import { initDb, insertArticle, getDigestPromptState } from '../db/index.js';
+const fetchViaJinaReaderMock = vi.hoisted(() => vi.fn());
+vi.mock('./jina-reader.js', async (importOriginal) => {
+  const actual = await importOriginal();
+  return { ...actual, fetchViaJinaReader: fetchViaJinaReaderMock };
+});
+
+import { initDb, insertArticle, getDigestPromptState, getDb } from '../db/index.js';
 import { triggerFetch } from './content-fetcher.js';
+import { JinaAbuseBlockError } from './jina-reader.js';
 
 const config = {
   telegramBotToken: 'test-token',
@@ -30,6 +37,7 @@ beforeEach(() => {
     title: `Title for ${url}`,
     content: `Real fetched body text for ${url}.`.repeat(5),
   }));
+  fetchViaJinaReaderMock.mockReset();
 });
 
 afterEach(() => {
@@ -77,5 +85,84 @@ describe('triggerFetch — on-demand burst fetch + reactive readiness', () => {
     await new Promise((resolve) => setTimeout(resolve, 1500));
 
     expect(fetchArticleContentMock).toHaveBeenCalledTimes(3);
+  }, 10000);
+});
+
+describe('Jina abuse-block retry (perplexity.ai, jinaReaderFallback: true)', () => {
+  const jinaConfig = { ...config, jinaReaderFallback: true };
+
+  function getArticleRow(url) {
+    return getDb().prepare('SELECT * FROM articles WHERE url = ?').get(url);
+  }
+
+  it('schedules a retry (not a permanent failure) with retry_after derived from blockedUntil + buffer', async () => {
+    insertArticle({ url: 'https://www.perplexity.ai/discover/top/x', title: '', content: '', source: 'telegram' });
+    const blockedUntil = new Date(Date.now() + 10 * 60 * 1000); // 10 min out
+    fetchViaJinaReaderMock.mockRejectedValueOnce(new JinaAbuseBlockError('blocked', blockedUntil));
+
+    triggerFetch(jinaConfig);
+    await new Promise((resolve) => setTimeout(resolve, 800));
+
+    const row = getArticleRow('https://www.perplexity.ai/discover/top/x');
+    expect(row.status).toBe('retry_scheduled');
+    expect(row.retry_count).toBe(1);
+    const retryAfterMs = new Date(row.retry_after).getTime();
+    // Expect blockedUntil + ~2min buffer, generous tolerance for test timing.
+    expect(retryAfterMs).toBeGreaterThan(blockedUntil.getTime() + 60 * 1000);
+    expect(retryAfterMs).toBeLessThan(blockedUntil.getTime() + 3 * 60 * 1000);
+  }, 10000);
+
+  it('defaults to a ~40min backoff when blockedUntil did not parse', async () => {
+    insertArticle({ url: 'https://www.perplexity.ai/discover/top/y', title: '', content: '', source: 'telegram' });
+    fetchViaJinaReaderMock.mockRejectedValueOnce(new JinaAbuseBlockError('blocked, no timestamp', null));
+
+    triggerFetch(jinaConfig);
+    await new Promise((resolve) => setTimeout(resolve, 800));
+
+    const row = getArticleRow('https://www.perplexity.ai/discover/top/y');
+    expect(row.status).toBe('retry_scheduled');
+    const waitMs = new Date(row.retry_after).getTime() - Date.now();
+    expect(waitMs).toBeGreaterThan(35 * 60 * 1000);
+    expect(waitMs).toBeLessThan(45 * 60 * 1000);
+  }, 10000);
+
+  it('caps at 3 attempts, then permanently fails instead of scheduling a 4th retry', async () => {
+    const { id } = insertArticle({ url: 'https://www.perplexity.ai/discover/top/z', title: '', content: '', source: 'telegram' });
+    // Seed as if all 3 allowed retries already happened — this failure is the 4th.
+    getDb().prepare(`UPDATE articles SET status = 'retry_scheduled', retry_count = 3, retry_after = datetime('now', '-1 minute') WHERE id = ?`).run(id);
+    fetchViaJinaReaderMock.mockRejectedValueOnce(new JinaAbuseBlockError('blocked again', new Date(Date.now() + 5 * 60 * 1000)));
+
+    triggerFetch(jinaConfig);
+    await new Promise((resolve) => setTimeout(resolve, 800));
+
+    const row = getArticleRow('https://www.perplexity.ai/discover/top/z');
+    expect(row.status).toBe('fetch_failed');
+    expect(row.fetch_error).toMatch(/retries exhausted/);
+  }, 10000);
+
+  it('a non-abuse Jina failure still fails permanently, unchanged', async () => {
+    insertArticle({ url: 'https://www.perplexity.ai/discover/top/w', title: '', content: '', source: 'telegram' });
+    fetchViaJinaReaderMock.mockRejectedValueOnce(new Error('Jina Reader HTTP 500 for x'));
+
+    triggerFetch(jinaConfig);
+    await new Promise((resolve) => setTimeout(resolve, 800));
+
+    const row = getArticleRow('https://www.perplexity.ai/discover/top/w');
+    expect(row.status).toBe('fetch_failed');
+    expect(row.fetch_error).toMatch(/Jina Reader fallback also failed/);
+  }, 10000);
+
+  it('retries a due retry_scheduled article on the next fetch pass and clears retry fields on success', async () => {
+    const { id } = insertArticle({ url: 'https://www.perplexity.ai/discover/top/v', title: '', content: '', source: 'telegram' });
+    getDb().prepare(`UPDATE articles SET status = 'retry_scheduled', retry_count = 1, retry_after = datetime('now', '-1 minute') WHERE id = ?`).run(id);
+    fetchViaJinaReaderMock.mockResolvedValueOnce({ title: 'Recovered', content: 'x'.repeat(300) });
+
+    triggerFetch(jinaConfig);
+    await new Promise((resolve) => setTimeout(resolve, 800));
+
+    const row = getArticleRow('https://www.perplexity.ai/discover/top/v');
+    expect(row.status).toBe('new');
+    expect(row.retry_count).toBe(0);
+    expect(row.retry_after).toBeNull();
   }, 10000);
 });

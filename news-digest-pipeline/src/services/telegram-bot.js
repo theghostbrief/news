@@ -1,4 +1,4 @@
-import { insertArticle, getArticleCount, getReadyArticleCount, getFetchingArticleCount } from '../db/index.js';
+import { insertArticle, getArticleCount, getReadyArticleCount, getFetchingArticleCount, getRetryingArticleCount } from '../db/index.js';
 import { validateArticleUrl } from './url-validator.js';
 import { sendTelegramMessage as sendMessage, answerCallbackQuery, setTelegramWebhook as setWebhook } from './telegram-api.js';
 import { COMPILE_CALLBACK_DATA, KEEP_ADDING_CALLBACK_DATA } from './compile-prompt.js';
@@ -20,6 +20,7 @@ const MANUAL_CONTENT_MIN_CHARS = 40;
 async function handleStatus(botToken, chatId) {
   const readyCount = getReadyArticleCount();
   const processingCount = getArticleCount('processing');
+  const retryingCount = getRetryingArticleCount();
   const usedCount = getArticleCount('used');
   const totalCount = getArticleCount();
 
@@ -28,6 +29,7 @@ async function handleStatus(botToken, chatId) {
     '',
     `New (ready): ${readyCount}`,
     `Processing: ${processingCount}`,
+    `Retrying: ${retryingCount}`,
     `Used: ${usedCount}`,
     `Total: ${totalCount}`,
   ].join('\n');
@@ -241,7 +243,8 @@ async function handleUrls(botToken, chatId, messageId, text, config) {
   // article actually completes, so the number doesn't just sit stale.
   const readyCount = getReadyArticleCount();
   const fetchingCount = getFetchingArticleCount();
-  const reply = formatStatusReply({ saved, duplicates, rejected, readyCount, fetchingCount });
+  const retryingCount = getRetryingArticleCount();
+  const reply = formatStatusReply({ saved, duplicates, rejected, readyCount, fetchingCount, retryingCount });
 
   const sent = await sendMessage(botToken, chatId, reply);
   if (sent?.message_id) {

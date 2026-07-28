@@ -229,6 +229,7 @@
         document.getElementById('stats').innerHTML =
           chip('New', s.new ?? 0) +
           chip('Processing', s.processing ?? 0) +
+          chip('Retrying', s.retry_scheduled ?? 0) +
           chip('Used', s.used ?? 0) +
           chip('Failed to fetch', s.fetch_failed ?? 0, (s.fetch_failed ?? 0) > 0) +
           chip('Total', s.total ?? 0);

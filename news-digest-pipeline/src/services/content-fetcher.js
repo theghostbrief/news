@@ -1,8 +1,16 @@
-import { getArticlesNeedingFetch, markArticleFetched, markArticleFetchFailed } from '../db/index.js';
+import { getArticlesNeedingFetch, markArticleFetched, markArticleFetchFailed, markArticleRetryScheduled } from '../db/index.js';
 import { fetchArticleContent } from './article-fetcher.js';
-import { fetchViaJinaReader } from './jina-reader.js';
+import { fetchViaJinaReader, JinaAbuseBlockError } from './jina-reader.js';
 import { checkReadyAndPrompt } from './queue-manager.js';
 import { scheduleStatusUpdate } from './status-updater.js';
+
+// Jina's transient domain-wide abuse block (see JinaAbuseBlockError) gets a
+// minutes-scale backoff retry instead of an immediate permanent fail — distinct
+// from the plain per-host throttle above, which is seconds-scale spacing
+// between ordinary requests, not a failure-recovery mechanism.
+const MAX_ABUSE_RETRIES = 3;
+const ABUSE_RETRY_BUFFER_MS = 2 * 60 * 1000; // wait this long past Jina's own stated expiry
+const DEFAULT_ABUSE_BACKOFF_MS = 40 * 60 * 1000; // used when the expiry timestamp didn't parse
 
 // Domains a plain server-side fetch can never reach, verified 2026-07-22:
 // perplexity.ai sits behind Cloudflare's bot challenge, which returns HTTP 403
@@ -25,6 +33,16 @@ async function throttleHost(hostname, minGapMs) {
   const wait = last + minGapMs - Date.now();
   if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait));
   lastRequestByHost.set(hostname, Date.now());
+}
+
+// blockedUntil is Jina's own stated expiry (parsed from its error message) when
+// available; falls back to a fixed backoff when it isn't. Either way, adds a
+// small buffer so the retry lands safely after the block actually lifts.
+function computeAbuseRetryAfter(blockedUntil) {
+  const base = blockedUntil instanceof Date && !isNaN(blockedUntil)
+    ? blockedUntil.getTime()
+    : Date.now() + DEFAULT_ABUSE_BACKOFF_MS;
+  return new Date(base + ABUSE_RETRY_BUFFER_MS);
 }
 
 // An on-demand trigger (article just saved) should drain far more than the
@@ -76,8 +94,27 @@ async function processFetchTick(config, limit) {
             await checkReadyAndPrompt(config);
             scheduleStatusUpdate(config);
           } catch (err) {
-            markArticleFetchFailed(article.id, `Blocked domain, Jina Reader fallback also failed: ${err.message}`);
-            console.warn(`[content-fetcher] Jina Reader fallback failed: ${article.url} — ${err.message}`);
+            if (err instanceof JinaAbuseBlockError) {
+              const nextRetryCount = (article.retry_count || 0) + 1;
+              if (nextRetryCount > MAX_ABUSE_RETRIES) {
+                markArticleFetchFailed(
+                  article.id,
+                  `Blocked domain, Jina Reader abuse-block retries exhausted (${MAX_ABUSE_RETRIES}): ${err.message}`
+                );
+                console.warn(`[content-fetcher] Jina abuse-block retries exhausted for ${article.url} — ${err.message}`);
+              } else {
+                const retryAfter = computeAbuseRetryAfter(err.blockedUntil);
+                markArticleRetryScheduled(article.id, {
+                  retryAfter: retryAfter.toISOString(),
+                  errorMessage: err.message,
+                  retryCount: nextRetryCount,
+                });
+                console.log(`[content-fetcher] Jina abuse-block for ${article.url} — retry ${nextRetryCount}/${MAX_ABUSE_RETRIES} scheduled for ${retryAfter.toISOString()}`);
+              }
+            } else {
+              markArticleFetchFailed(article.id, `Blocked domain, Jina Reader fallback also failed: ${err.message}`);
+              console.warn(`[content-fetcher] Jina Reader fallback failed: ${article.url} — ${err.message}`);
+            }
             scheduleStatusUpdate(config);
           }
         } else {
