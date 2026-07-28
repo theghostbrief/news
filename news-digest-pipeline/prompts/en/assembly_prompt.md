@@ -48,10 +48,38 @@ commentary text.
    the highest viral/emotional potential for short-form video, ranked by nothing
    in particular — just pick three.
 
-5. A blank line, then the footer line, copied VERBATIM, BYTE FOR BYTE, with no
+5. A blank line, then exactly 3 lines, one per TOP3 item, in the same order as
+   the TOP3 marker (idx = n1, then n2, then n3):
+
+   `<!--THREADS idx=N text="<1-2 sentence Threads-native take>"-->`
+
+   This is a SHORT version of the same item for a different medium (Threads,
+   500-char limit) — not a summary of the commentary and not a truncation of
+   it. It must follow every rule in "TONE — CALM, PRECISE, ANALYTICAL" and
+   "OSINT HYGIENE" from the Phase A prompt exactly as the main commentary
+   does: state the event, add one analytical observation, never "the article
+   argues/reports/says" framing, and use confirmed / claimed by <side> /
+   unverified ONLY when that item's own commentary already establishes that
+   status — never invent, upgrade, or downgrade a confidence marker that
+   isn't already there. It is a shorter cut of the Ghost voice, not a
+   different register: no hashtags, no emoji, no exclamation points — nothing
+   not already implied by the item's own commentary and headline.
+
+   Write it in your own words from the commentary's substance — do not copy
+   and cut off the commentary text (that produces mid-sentence truncation,
+   which is exactly what this field exists to avoid). Target: **under 420
+   characters total** for the `text="..."` value. 1–2 sentences. If the full
+   analytical point doesn't fit, keep the event and the sharpest observation
+   and drop the rest — never end mid-sentence.
+
+   Do not use a straight double-quote character inside the `text="..."` value
+   — if quoting a phrase, use curly quotes “ ” (as the main commentary
+   already does), so the attribute stays well-formed.
+
+6. A blank line, then the footer line, copied VERBATIM, BYTE FOR BYTE, with no
    changes, no rephrasing, no "improving." Copy it exactly as given.
 
-6. A blank line, then the hashtag line, copied VERBATIM. Do not alter it, do not
+7. A blank line, then the hashtag line, copied VERBATIM. Do not alter it, do not
    add or remove hashtags, do not insert spaces inside a hashtag, do not add any
    introductory words before it (no "Hashtags:", no "Tags:" — output only the
    hashtags themselves, exactly as given, and nothing else on that line).
@@ -75,8 +103,13 @@ reproduced byte-for-byte regardless of its spelling.
 - Never echo any instruction, label, or heading from this prompt into the output
   (e.g. never output the literal words "Footer (insert verbatim...)" or
   "Hashtags (insert...)" — those are instructions to you, not text to reproduce).
+- Exactly 3 `<!--THREADS-->` lines must appear, one per TOP3 item, matching
+  its idx — never more, never fewer, never for an item outside TOP3.
+- THREADS lines obey the same OSINT confidence-marker and no-source-hedging
+  rules as the main commentary (see prompt.md) — never invent a confidence
+  marker the item's own commentary doesn't already establish.
 - The digest is INCOMPLETE and WRONG if it does not end with the footer and the
-  hashtag line, in that order, after the TOP3 marker.
+  hashtag line, in that order, after the TOP3 marker and its 3 THREADS lines.
 - Hashtags must always be single unbroken tokens with no internal spaces (this is
   enforced upstream in the hashtag line you're given — just copy it exactly and
   never split, merge, or reflow it).
@@ -101,6 +134,9 @@ https://example.com/article-c3d4
 Ghost's read: today's throughline is two governments describing the same week in mutually exclusive adjectives, and neither one showing their homework.
 
 <!--TOP3 [1,2]-->
+
+<!--THREADS idx=1 text="Another 'delivered ahead of schedule' release quietly redefines the baseline — eleven months late against the original contract, on-time only against the revised one."-->
+<!--THREADS idx=2 text="Moscow claims the strike hit only military infrastructure — claimed by the Ministry of Defense, unverified by independent imagery. Kyiv's count differs, and neither is settled yet."-->
 
 The Ghost Brief — daily defense & security digest. Full brief: theghostbrief.com
 
