@@ -114,11 +114,33 @@ export function extractFromJinaMarkdown(markdown) {
       if (/^!?\[.*\]\(.*\)$/.test(t)) return false; // image/link-only lines
       if (/^\d+ sources?$/.test(t)) return false; // "2 sources" source-count labels
       if (/^[a-z0-9.+-]+$/i.test(t) && t.length < 30 && !t.includes(' ')) return false; // bare domain/favicon labels
+      if (/^Published$/.test(t)) return false; // byline label with no date attached
+      if (/^\d+ (minutes?|hours?|days?|weeks?|months?|years?) ago$/i.test(t)) return false; // relative byline timestamp
       return true;
     })
+    // Strip inline citation tags Perplexity appends mid-sentence, e.g.
+    // '...as reported by [wionews](http://...)' or bare '[tbsnews+1]' tags.
+    // Must run AFTER the whole-line image/link filter above: nested
+    // image+link byline lines (`[![Image](url) caption](url2)`) have
+    // unbalanced brackets these regexes can't parse safely and would leave a
+    // mangled fragment behind — the line filter removes those lines whole
+    // first, so these regexes only ever see plain prose lines.
+    .map((line) =>
+      line
+        .replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, '')
+        .replace(/\[[a-z0-9+.-]+\+?\d*\]/gi, '')
+    )
+    .filter((line) => line.trim().length > 0)
     .join('\n\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
+
+  // Catches the case where no trailing marker was found (e.g. an unfamiliar
+  // page layout) and the "content" that survived is actually a cookie-consent
+  // panel long enough to clear the length check below, not the article.
+  if (/permits cookies, pixels|consent is treated as implied|manage your (cookie|privacy)/i.test(content)) {
+    throw new Error('Jina returned consent/boilerplate, not article');
+  }
 
   if (content.length < 200) {
     throw new Error(`Insufficient content via Jina Reader (${content.length} chars)`);

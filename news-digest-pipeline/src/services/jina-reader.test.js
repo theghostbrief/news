@@ -75,6 +75,39 @@ describe('extractFromJinaMarkdown', () => {
     expect(content).not.toMatch(/^!\[/m);
   });
 
+  it('drops the "Published" / relative-timestamp byline lines', () => {
+    const { content } = extractFromJinaMarkdown(SAMPLE);
+    expect(content).not.toMatch(/^Published$/m);
+    expect(content).not.toContain('20 hours ago');
+  });
+
+  it('drops the nested image+link byline line without leaking a mangled fragment', () => {
+    const { content } = extractFromJinaMarkdown(SAMPLE);
+    expect(content).not.toContain('internazionale');
+    expect(content).not.toMatch(/\]\(https?:\/\//); // no dangling markdown link syntax anywhere
+  });
+
+  it('strips inline citation links and bare bracket tags from body prose', () => {
+    const markdown = `## Drone strike hits energy facility
+
+As reported by [wionews](https://wionews.com/a), officials confirmed the strike hit a substation near the border. Additional details were confirmed [tbsnews+1] by regional monitors tracking the aftermath and cleanup efforts underway across the affected district this week.`;
+
+    const { content } = extractFromJinaMarkdown(markdown);
+    expect(content).not.toContain('[wionews]');
+    expect(content).not.toContain('wionews.com');
+    expect(content).not.toContain('[tbsnews+1]');
+    expect(content).toContain('officials confirmed the strike hit a substation near the border');
+    expect(content).toContain('Additional details were confirmed');
+  });
+
+  it('throws when the extracted body is cookie/consent boilerplate, not the article', () => {
+    const markdown = `## Manage your privacy settings
+
+We and our trusted partners use cookies, pixels, and similar technologies to store and access information on your device. This site permits cookies, pixels, and SDKs to operate as part of our service, and your continued use of this site means consent is treated as implied unless you opt out via the settings below. Manage your cookie preferences at any time from this panel to control how we and our partners process your data across our network of publisher sites globally today.`;
+
+    expect(() => extractFromJinaMarkdown(markdown)).toThrow(/consent\/boilerplate/);
+  });
+
   it('throws when there is no H2 heading at all', () => {
     expect(() => extractFromJinaMarkdown('no headings here, just text')).toThrow(/heading/);
   });
