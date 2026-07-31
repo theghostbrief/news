@@ -172,6 +172,10 @@ router.patch('/:id/status', (req, res) => {
       return res.status(404).json({ error: 'Digest not found' });
     }
 
+    if (status === 'published' && (!digest.content || !digest.content.trim())) {
+      return res.status(400).json({ error: 'Cannot publish a digest with no content' });
+    }
+
     const db = getDb();
     if (status === 'published') {
       db.prepare(
