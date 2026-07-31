@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>The Ghost Brief — Daily Defense &amp; Security Digest</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f5f3ef;
+      color: #2d2a26;
+      min-height: 100vh;
+      font-size: 16px;
+      line-height: 1.55;
+    }
+
+    .container { max-width: 760px; margin: 0 auto; padding: 32px 20px 80px; }
+
+    header.site-header {
+      margin-bottom: 40px;
+    }
+    header.site-header h1 {
+      font-size: 28px;
+      font-weight: 700;
+      letter-spacing: -0.3px;
+    }
+    header.site-header p {
+      color: #6b665f;
+      font-size: 14px;
+      margin-top: 4px;
+    }
+
+    /* Day list */
+    .day-list { list-style: none; }
+    .day-list li {
+      border-bottom: 1px solid #e4e0d8;
+    }
+    .day-list a {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      padding: 18px 4px;
+      text-decoration: none;
+      color: #2d2a26;
+    }
+    .day-list a:hover .day-date { color: #7c3aed; }
+    .day-date { font-size: 17px; font-weight: 600; }
+    .day-edition { font-size: 13px; color: #8a8580; }
+    .day-arrow { color: #b5afa6; font-size: 18px; }
+
+    .empty-state, .error-state {
+      color: #8a8580;
+      padding: 40px 4px;
+    }
+
+    /* Digest detail */
+    .back-link {
+      display: inline-block;
+      margin-bottom: 24px;
+      color: #6b665f;
+      text-decoration: none;
+      font-size: 14px;
+    }
+    .back-link:hover { color: #7c3aed; }
+
+    .digest-date {
+      font-size: 14px;
+      color: #8a8580;
+      margin-bottom: 24px;
+      letter-spacing: 0.2px;
+    }
+
+    article.item {
+      padding: 28px 0;
+      border-bottom: 1px solid #e4e0d8;
+    }
+    article.item:first-of-type { padding-top: 0; }
+
+    article.item img {
+      width: 100%;
+      border-radius: 8px;
+      margin-bottom: 16px;
+      display: block;
+    }
+
+    article.item h2 {
+      font-size: 19px;
+      font-weight: 600;
+      margin-bottom: 10px;
+      letter-spacing: -0.1px;
+    }
+
+    article.item .commentary p {
+      margin-bottom: 12px;
+      color: #3a3630;
+    }
+    article.item .commentary p:last-child { margin-bottom: 0; }
+
+    article.item .source {
+      display: inline-block;
+      margin-top: 14px;
+      font-size: 13px;
+      font-weight: 500;
+      color: #7c3aed;
+      text-decoration: none;
+    }
+    article.item .source:hover { text-decoration: underline; }
+
+    .ghosts-read {
+      margin-top: 32px;
+      padding: 20px;
+      background: #efeae1;
+      border-radius: 8px;
+      font-size: 14px;
+      color: #4a453e;
+    }
+    .ghosts-read strong { color: #2d2a26; }
+  </style>
+</head>
+<body>
+  <div class="container" id="app">
+    <header class="site-header">
+      <h1>👻 The Ghost Brief</h1>
+      <p>Daily defense &amp; security digest</p>
+    </header>
+    <div id="content">Loading…</div>
+  </div>
+
+  <script>
+    function escapeHtml(str) {
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    function formatDate(dateStr) {
+      const d = new Date(dateStr + 'T00:00:00Z');
+      if (isNaN(d.getTime())) return dateStr;
+      return d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+    }
+
+    function renderCommentary(text) {
+      return text
+        .split('\n\n')
+        .map((p) => `<p>${escapeHtml(p)}</p>`)
+        .join('');
+    }
+
+    async function renderList() {
+      const content = document.getElementById('content');
+      content.innerHTML = 'Loading…';
+      try {
+        const res = await fetch('/api/public/digests');
+        if (!res.ok) throw new Error('failed to load');
+        const digests = await res.json();
+
+        if (digests.length === 0) {
+          content.innerHTML = '<div class="empty-state">No digests published yet.</div>';
+          return;
+        }
+
+        // Group by date so a day with more than one edition shows both.
+        const byDate = new Map();
+        for (const d of digests) {
+          if (!byDate.has(d.date)) byDate.set(d.date, []);
+          byDate.get(d.date).push(d);
+        }
+
+        let html = '<ul class="day-list">';
+        for (const [date, entries] of byDate) {
+          entries.forEach((entry, i) => {
+            const editionLabel = entries.length > 1 ? `<span class="day-edition">Edition ${i + 1}</span>` : '';
+            html += `
+              <li>
+                <a href="?id=${encodeURIComponent(entry.id)}" data-id="${escapeHtml(entry.id)}">
+                  <span>
+                    <span class="day-date">${escapeHtml(formatDate(date))}</span>
+                    ${editionLabel}
+                  </span>
+                  <span class="day-arrow">→</span>
+                </a>
+              </li>`;
+          });
+        }
+        html += '</ul>';
+        content.innerHTML = html;
+
+        content.querySelectorAll('a[data-id]').forEach((a) => {
+          a.addEventListener('click', (e) => {
+            e.preventDefault();
+            const id = a.getAttribute('data-id');
+            history.pushState({ id }, '', `?id=${encodeURIComponent(id)}`);
+            renderDigest(id);
+          });
+        });
+      } catch (err) {
+        content.innerHTML = '<div class="error-state">Couldn\'t load the digest list. Try again shortly.</div>';
+      }
+    }
+
+    async function renderDigest(id) {
+      const content = document.getElementById('content');
+      content.innerHTML = 'Loading…';
+      try {
+        const res = await fetch(`/api/public/digests/${encodeURIComponent(id)}`);
+        if (!res.ok) throw new Error('failed to load');
+        const digest = await res.json();
+
+        let html = '<a href="/" class="back-link" id="back-link">← All digests</a>';
+        html += `<div class="digest-date">${escapeHtml(formatDate(digest.date))}</div>`;
+
+        for (const item of digest.items) {
+          html += '<article class="item">';
+          if (item.image_url) {
+            html += `<img src="${escapeHtml(item.image_url)}" alt="">`;
+          }
+          html += `<h2>${escapeHtml(item.headline)}</h2>`;
+          html += `<div class="commentary">${renderCommentary(item.commentary)}</div>`;
+          if (item.source) {
+            html += `<a class="source" href="${escapeHtml(item.source.url)}" target="_blank" rel="noopener noreferrer nofollow">${escapeHtml(item.source.label)} →</a>`;
+          }
+          html += '</article>';
+        }
+
+        if (digest.ghosts_read) {
+          html += `<div class="ghosts-read"><strong>Ghost's read:</strong> ${escapeHtml(digest.ghosts_read)}</div>`;
+        }
+
+        content.innerHTML = html;
+
+        document.getElementById('back-link').addEventListener('click', (e) => {
+          e.preventDefault();
+          history.pushState({}, '', '/');
+          renderList();
+        });
+      } catch (err) {
+        content.innerHTML = '<div class="error-state">Couldn\'t load this digest. <a href="/">Back to all digests</a></div>';
+      }
+    }
+
+    function route() {
+      const params = new URLSearchParams(location.search);
+      const id = params.get('id');
+      if (id) {
+        renderDigest(id);
+      } else {
+        renderList();
+      }
+    }
+
+    window.addEventListener('popstate', route);
+    route();
+  </script>
+</body>
+</html>

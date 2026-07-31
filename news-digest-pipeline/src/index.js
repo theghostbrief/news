@@ -12,6 +12,7 @@ import digestsRouter from './routes/digests.js';
 import telegramRouter from './routes/telegram.js';
 import settingsRouter from './routes/settings.js';
 import authRouter from './routes/auth.js';
+import publicRouter from './routes/public.js';
 import { loadPro } from './pro-loader.js';
 import { startQueueManager } from './services/queue-manager.js';
 import { startContentFetcher } from './services/content-fetcher.js';
@@ -104,9 +105,13 @@ const telegramLimiter = rateLimit({
 // Health endpoint — public, no auth
 app.use('/health', healthRouter);
 
-// Dashboard pages — served publicly. Read-only for anonymous visitors; the
-// frontend enables editing controls only after a successful login. Writes are
-// still enforced server-side by writeAuth below.
+// Dashboard pages — moved off the root domain to /admin (2026-07-31) so the
+// public reader page can live at root. Still read-only for anonymous
+// visitors; the frontend enables editing controls only after a successful
+// login. Writes are still enforced server-side by writeAuth below. Old
+// bookmarked bare paths (e.g. /articles.html) are deliberately NOT redirected
+// — they were never linked from any published post (confirmed against every
+// digest published since the Ghost persona launched), so a 404 is fine.
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 20, // login attempts per IP per 15 min
@@ -114,7 +119,12 @@ const loginLimiter = rateLimit({
   skipSuccessfulRequests: true,
 });
 
-app.use(express.static(join(__dirname, 'public')));
+app.use('/admin', express.static(join(__dirname, 'public')));
+
+// Public reader page — served at root. Every published post's footer has
+// always linked the bare domain (never a dashboard path), so this is the
+// URL people actually have.
+app.use(express.static(join(__dirname, 'public-site')));
 
 // Auth status/login — public (status is read-only; login triggers Basic Auth)
 app.use('/api/auth', loginLimiter, authRouter);
@@ -159,6 +169,12 @@ console.log(
 app.get('/api/features', (req, res) => {
   res.json({ features: enabledFeatures });
 });
+
+// Public reader page's API — read-only, hardcoded to published digests only
+// (see routes/public.js). Sits alongside the other /api mounts, still behind
+// the rate limiters registered above; writeAuth is a no-op for it since it's
+// GET-only.
+app.use('/api/public', publicRouter);
 
 app.use('/api/articles', articlesRouter);
 app.use('/api/digests/generate', generateLimiter);

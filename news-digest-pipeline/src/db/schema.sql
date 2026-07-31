@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS articles (
   source_message_id TEXT,
   retry_count INTEGER DEFAULT 0,
   retry_after TEXT,
+  image_url TEXT,
   created_at TEXT DEFAULT (datetime('now')),
   updated_at TEXT DEFAULT (datetime('now')),
   FOREIGN KEY (digest_id) REFERENCES digests(id)

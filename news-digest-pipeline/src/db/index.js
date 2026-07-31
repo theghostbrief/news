@@ -31,6 +31,12 @@ export function initDb(dbPath) {
   if (!articleCols.has('retry_after')) {
     db.exec('ALTER TABLE articles ADD COLUMN retry_after TEXT');
   }
+  if (!articleCols.has('image_url')) {
+    // Reserved for the public digest page (theghostbrief.com). Unpopulated
+    // until an image fetch/generation step exists — no publisher or fetcher
+    // writes this yet.
+    db.exec('ALTER TABLE articles ADD COLUMN image_url TEXT');
+  }
 
   // Token accounting + cost columns on digests (idempotent)
   const digestCols = new Set(db.prepare('PRAGMA table_info(digests)').all().map((c) => c.name));
@@ -360,6 +366,36 @@ export function getDigests(filters = {}) {
   }
 
   return db.prepare(query).all(...params);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Public reader page (theghostbrief.com) queries. status='published' is a
+// literal in the SQL text, not a bound parameter — no caller-supplied filter
+// can ever widen these past what's actually published. Also excludes empty
+// content (a digest can exist as status='published' with content='' if a
+// crash landed between createDigest() and the content-filling update, or via
+// the manual PATCH /:id/status route) and anything still flagged by the
+// non-Latin-script guard (script_warning) — a flagged draft must not reach
+// the public page even if an owner published before clearing the warning.
+// ─────────────────────────────────────────────────────────────────────────────
+const PUBLISHED_WHERE = `
+  status = 'published'
+  AND content IS NOT NULL AND content != ''
+  AND (script_warning IS NULL OR script_warning = '')
+`;
+
+export function getPublishedDigests({ limit } = {}) {
+  let query = `SELECT id, date, part, created_at FROM digests WHERE ${PUBLISHED_WHERE} ORDER BY date DESC, created_at DESC`;
+  const params = [];
+  if (limit) {
+    query += ' LIMIT ?';
+    params.push(limit);
+  }
+  return db.prepare(query).all(...params);
+}
+
+export function getPublishedDigestById(id) {
+  return db.prepare(`SELECT * FROM digests WHERE id = ? AND ${PUBLISHED_WHERE}`).get(id);
 }
 
 export function getArticlesByDigestId(digestId) {
