@@ -78,8 +78,11 @@ export async function publishDigest(digest, config, platforms) {
   }
 
   // Threads — mirrors the Facebook pattern (§11.4 media-pipeline-spec.md):
-  // 'published' only on a FULL 4-post chain (lead + 2 replies + closing),
-  // never on a partial chain that stopped partway through.
+  // 'published' only when all 3 TOP3 items posted standalone, never on a
+  // partial run that stopped partway through. threads_thread_ids is always
+  // persisted (even on partial/failure) — publishThreadsChain() reads it back
+  // on the next attempt to resume from the first item that never posted,
+  // instead of re-posting items a prior attempt already published.
   if (shouldPublish('threads') && config.threadsUserId && config.threadsAccessToken) {
     try {
       results.threads = await publishThreadsChain(digest, config);
@@ -89,7 +92,7 @@ export async function publishDigest(digest, config, platforms) {
     }
 
     updateFields.threads_thread_ids = JSON.stringify(results.threads?.threadIds || []);
-    if (results.threads?.threadIds?.length === 4 && !results.threads.error) {
+    if (results.threads?.threadIds?.length === 3 && !results.threads.error) {
       updateFields.threads_status = 'published';
       updateFields.threads_error = null;
     } else {

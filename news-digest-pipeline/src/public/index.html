@@ -629,11 +629,11 @@
             ? `<button class="plat-btn sent" disabled>✓ FB</button>`
             : `<button class="plat-btn${fbFailed ? ' failed' : ''}" onclick="publishPlatform('${d.id}','facebook',this)" title="${fbFailed ? esc(d.facebook_error || 'Facebook publish failed') : ''}">${fbFailed ? '✗ FB' : '📘 FB'}</button>`;
 
-          // "Sent" = the full 4-post chain succeeded, mirroring threads_status
-          // never being 'published' on a partial chain (publishers/index.js).
+          // "Sent" = all 3 standalone posts succeeded, mirroring threads_status
+          // never being 'published' on a partial run (publishers/index.js).
           let threadsIds = [];
           try { threadsIds = d.threads_thread_ids ? JSON.parse(d.threads_thread_ids) : []; } catch { threadsIds = []; }
-          const threadsSent = threadsIds.length === 4;
+          const threadsSent = threadsIds.length === 3;
           const threadsFailed = !threadsSent && d.threads_status === 'failed';
           const threadsBtn = threadsSent
             ? `<button class="plat-btn sent" disabled>✓ Threads</button>`
@@ -726,9 +726,9 @@
         if (!res.ok) throw new Error(data.error || 'Server error');
 
         const result = data.published?.[platform];
-        // Threads success = the full 4-post reply chain, not just "some id came back".
+        // Threads success = all 3 standalone posts, not just "some id came back".
         const succeeded = platform === 'threads'
-          ? (result?.threadIds?.length === 4 && !result?.error)
+          ? (result?.threadIds?.length === 3 && !result?.error)
           : (result?.postId || result?.messageId);
         if (succeeded) {
           btn.className = 'plat-btn sent';

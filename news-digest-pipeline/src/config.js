@@ -194,11 +194,12 @@ function buildConfig() {
     youtubeChannelId: process.env.YOUTUBE_CHANNEL_ID || '',
     threadsUserId: process.env.THREADS_USER_ID || '',
     threadsAccessToken: process.env.THREADS_ACCESS_TOKEN || '',
-    // Prefix for the closing reply's link line, e.g. "Full brief: <link>".
+    // Prefix for the link line appended to every Threads post, e.g. "Full brief: <link>".
     threadsLinkText: process.env.THREADS_LINK_TEXT || 'Full brief:',
-    // Manual override for the closing reply's link — see resolveCanonicalLink()
-    // in threads-publisher.js for the full priority order (this env var, then
-    // a future site URL once P3 ships, then the Telegram channel link).
+    // Manual override for the link appended to every post — see
+    // resolveCanonicalLink() in threads-publisher.js for the full priority
+    // order (this env var, then a future site URL once P3 ships, then the
+    // Telegram channel link).
     threadsLinkUrl: process.env.THREADS_LINK_URL || '',
 
     // Planned integrations (placeholders for status display only — pipelines

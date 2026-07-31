@@ -4,7 +4,6 @@ import {
   parseTop3Items,
   trimToThreadsLimit,
   formatItemPost,
-  formatClosingReply,
   resolveCanonicalLink,
   publishThreadsChain,
   pollContainerStatus,
@@ -116,11 +115,11 @@ describe('trimToThreadsLimit', () => {
   });
 });
 
-describe('formatItemPost / formatClosingReply', () => {
-  it('falls back to headline + commentary when threadsText is absent', () => {
+describe('formatItemPost', () => {
+  it('falls back to headline + commentary when threadsText is absent, with the link appended', () => {
     const item = { headline: 'Headline here', commentary: 'Commentary text.', threadsText: null };
-    const post = formatItemPost(item);
-    expect(post).toBe('Headline here\n\nCommentary text.');
+    const post = formatItemPost(item, 't.me/theghostbrief', 'Full brief:');
+    expect(post).toBe('Headline here\n\nCommentary text.\n\nFull brief: t.me/theghostbrief');
   });
 
   it('prefers the short threadsText take over the full commentary when present', () => {
@@ -129,12 +128,24 @@ describe('formatItemPost / formatClosingReply', () => {
       commentary: 'The full, much longer digest commentary paragraph that should NOT be used.',
       threadsText: 'Short Threads-native take.',
     };
-    const post = formatItemPost(item);
-    expect(post).toBe('Headline here\n\nShort Threads-native take.');
+    const post = formatItemPost(item, 't.me/theghostbrief', 'Full brief:');
+    expect(post).toBe('Headline here\n\nShort Threads-native take.\n\nFull brief: t.me/theghostbrief');
   });
 
-  it('builds the closing reply as "<linkText> <link>"', () => {
-    expect(formatClosingReply('t.me/theghostbrief', 'Full brief:')).toBe('Full brief: t.me/theghostbrief');
+  it('omits the link itself (keeps just the label) when no canonical link is configured', () => {
+    const item = { headline: 'Headline here', commentary: 'Commentary text.', threadsText: null };
+    const post = formatItemPost(item, '', 'Full brief:');
+    expect(post).toBe('Headline here\n\nCommentary text.\n\nFull brief:');
+  });
+
+  it('never truncates the link, even when the headline+body would otherwise overflow the limit', () => {
+    const longBody = 'word '.repeat(200).trim(); // way over the post limit on its own
+    const item = { headline: 'Headline', commentary: longBody, threadsText: null };
+    const post = formatItemPost(item, 't.me/theghostbrief', 'Full brief:');
+
+    expect(post.length).toBeLessThanOrEqual(500);
+    expect(post.endsWith('Full brief: t.me/theghostbrief')).toBe(true);
+    expect(post).toContain('…'); // the body portion, not the link, absorbed the trim
   });
 });
 
@@ -163,67 +174,69 @@ describe('publishThreadsChain', () => {
   };
   const digest = { id: 'd1', content: SAMPLE_CONTENT };
 
-  // Each post is now create -> poll(status) -> publish = 3 fetch calls.
+  // Each post is create -> poll(status) -> publish = 3 fetch calls.
   const okPoll = () => jsonResponse({ status: 'FINISHED' });
 
-  it('publishes the full 4-post chain and returns all 4 ids in order', async () => {
+  it('publishes all 3 items as standalone top-level posts, each carrying the link', async () => {
     const fetchMock = vi.fn()
-      .mockResolvedValueOnce(jsonResponse({ id: 'c1' })).mockResolvedValueOnce(okPoll()).mockResolvedValueOnce(jsonResponse({ id: 'p1' })) // lead
-      .mockResolvedValueOnce(jsonResponse({ id: 'c2' })).mockResolvedValueOnce(okPoll()).mockResolvedValueOnce(jsonResponse({ id: 'p2' })) // reply1
-      .mockResolvedValueOnce(jsonResponse({ id: 'c3' })).mockResolvedValueOnce(okPoll()).mockResolvedValueOnce(jsonResponse({ id: 'p3' })) // reply2
-      .mockResolvedValueOnce(jsonResponse({ id: 'c4' })).mockResolvedValueOnce(okPoll()).mockResolvedValueOnce(jsonResponse({ id: 'p4' })); // closing
+      .mockResolvedValueOnce(jsonResponse({ id: 'c1' })).mockResolvedValueOnce(okPoll()).mockResolvedValueOnce(jsonResponse({ id: 'p1' })) // item1
+      .mockResolvedValueOnce(jsonResponse({ id: 'c2' })).mockResolvedValueOnce(okPoll()).mockResolvedValueOnce(jsonResponse({ id: 'p2' })) // item2
+      .mockResolvedValueOnce(jsonResponse({ id: 'c3' })).mockResolvedValueOnce(okPoll()).mockResolvedValueOnce(jsonResponse({ id: 'p3' })); // item3
     vi.stubGlobal('fetch', fetchMock);
 
     const result = await publishThreadsChain(digest, config, FAST_POLL);
 
-    expect(result.threadIds).toEqual(['p1', 'p2', 'p3', 'p4']);
+    expect(result.threadIds).toEqual(['p1', 'p2', 'p3']);
     expect(result.error).toBeUndefined();
-    expect(fetchMock).toHaveBeenCalledTimes(12);
+    expect(fetchMock).toHaveBeenCalledTimes(9);
 
-    // Each reply after the first must reply_to_id the previous post, chained
-    // sequentially (not all replying to the lead).
-    const reply1CreateBody = JSON.parse(fetchMock.mock.calls[3][1].body);
-    expect(reply1CreateBody.reply_to_id).toBe('p1');
-    const reply2CreateBody = JSON.parse(fetchMock.mock.calls[6][1].body);
-    expect(reply2CreateBody.reply_to_id).toBe('p2');
-    const closingCreateBody = JSON.parse(fetchMock.mock.calls[9][1].body);
-    expect(closingCreateBody.reply_to_id).toBe('p3');
-    expect(closingCreateBody.text).toBe('Full brief: https://theghostbrief.com');
+    // No post replies to another — every create body must be reply_to_id-free.
+    const item1CreateBody = JSON.parse(fetchMock.mock.calls[0][1].body);
+    const item2CreateBody = JSON.parse(fetchMock.mock.calls[3][1].body);
+    const item3CreateBody = JSON.parse(fetchMock.mock.calls[6][1].body);
+    expect(item1CreateBody.reply_to_id).toBeUndefined();
+    expect(item2CreateBody.reply_to_id).toBeUndefined();
+    expect(item3CreateBody.reply_to_id).toBeUndefined();
+
+    // Every post, not just a dedicated closing one, ends with the link.
+    expect(item1CreateBody.text.endsWith('Full brief: https://theghostbrief.com')).toBe(true);
+    expect(item2CreateBody.text.endsWith('Full brief: https://theghostbrief.com')).toBe(true);
+    expect(item3CreateBody.text.endsWith('Full brief: https://theghostbrief.com')).toBe(true);
   });
 
-  it('stops at the first failure with no orphaned replies attempted', async () => {
+  it('stops at the first failure and returns only what actually published', async () => {
     const fetchMock = vi.fn()
-      .mockResolvedValueOnce(jsonResponse({ id: 'c1' })).mockResolvedValueOnce(okPoll()).mockResolvedValueOnce(jsonResponse({ id: 'p1' })) // lead ok
-      .mockResolvedValueOnce(jsonResponse({ error: { message: 'Rate limited' } }, false, 429)); // reply1 create fails
+      .mockResolvedValueOnce(jsonResponse({ id: 'c1' })).mockResolvedValueOnce(okPoll()).mockResolvedValueOnce(jsonResponse({ id: 'p1' })) // item1 ok
+      .mockResolvedValueOnce(jsonResponse({ error: { message: 'Rate limited' } }, false, 429)); // item2 create fails
     vi.stubGlobal('fetch', fetchMock);
 
     const result = await publishThreadsChain(digest, config, FAST_POLL);
 
     expect(result.threadIds).toEqual(['p1']);
-    expect(result.failedAt).toBe('reply1');
+    expect(result.failedAt).toBe('item2');
     expect(result.error).toMatch(/Rate limited/);
-    // 4 calls happened: lead create+poll+publish, then reply1's failed create.
-    // reply1's poll/publish and reply2/closing never fire — no orphaned replies.
+    // 4 calls happened: item1 create+poll+publish, then item2's failed create.
+    // item2's poll/publish and item3 never fire.
     expect(fetchMock).toHaveBeenCalledTimes(4);
   });
 
-  it('stops the chain when a container status poll reports ERROR, without ever calling publish for it', async () => {
+  it('stops when a container status poll reports ERROR, without ever calling publish for it', async () => {
     const fetchMock = vi.fn()
-      .mockResolvedValueOnce(jsonResponse({ id: 'c1' })) // lead create ok
-      .mockResolvedValueOnce(jsonResponse({ status: 'ERROR', error_message: 'UNKNOWN' })); // lead poll -> ERROR
+      .mockResolvedValueOnce(jsonResponse({ id: 'c1' })) // item1 create ok
+      .mockResolvedValueOnce(jsonResponse({ status: 'ERROR', error_message: 'UNKNOWN' })); // item1 poll -> ERROR
     vi.stubGlobal('fetch', fetchMock);
 
     const result = await publishThreadsChain(digest, config, FAST_POLL);
 
     expect(result.threadIds).toEqual([]);
-    expect(result.failedAt).toBe('lead');
+    expect(result.failedAt).toBe('item1');
     expect(result.error).toMatch(/status ERROR/);
     expect(fetchMock).toHaveBeenCalledTimes(2); // create + 1 poll, publish never called
   });
 
-  it('stops the chain when a container never reaches FINISHED before the poll attempt budget runs out', async () => {
+  it('stops when a container never reaches FINISHED before the poll attempt budget runs out', async () => {
     const fetchMock = vi.fn()
-      .mockResolvedValueOnce(jsonResponse({ id: 'c1' })) // lead create ok
+      .mockResolvedValueOnce(jsonResponse({ id: 'c1' })) // item1 create ok
       .mockResolvedValueOnce(jsonResponse({ status: 'IN_PROGRESS' }))
       .mockResolvedValueOnce(jsonResponse({ status: 'IN_PROGRESS' })); // exhausts a 2-attempt budget
     vi.stubGlobal('fetch', fetchMock);
@@ -231,7 +244,7 @@ describe('publishThreadsChain', () => {
     const result = await publishThreadsChain(digest, config, { intervalMs: 0, maxAttempts: 2 });
 
     expect(result.threadIds).toEqual([]);
-    expect(result.failedAt).toBe('lead');
+    expect(result.failedAt).toBe('item1');
     expect(result.error).toMatch(/did not reach FINISHED/);
     expect(fetchMock).toHaveBeenCalledTimes(3); // create + 2 polls, publish never called
   });
@@ -256,6 +269,48 @@ describe('publishThreadsChain', () => {
     expect(result.threadIds).toEqual([]);
     expect(result.error).toMatch(/TOP3/);
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  describe('resuming a retried run (threads_thread_ids)', () => {
+    it('skips already-published items and only posts the remaining ones', async () => {
+      const retryDigest = { id: 'd1', content: SAMPLE_CONTENT, threads_thread_ids: JSON.stringify(['p1']) };
+      const fetchMock = vi.fn()
+        .mockResolvedValueOnce(jsonResponse({ id: 'c2' })).mockResolvedValueOnce(okPoll()).mockResolvedValueOnce(jsonResponse({ id: 'p2' })) // item2
+        .mockResolvedValueOnce(jsonResponse({ id: 'c3' })).mockResolvedValueOnce(okPoll()).mockResolvedValueOnce(jsonResponse({ id: 'p3' })); // item3
+      vi.stubGlobal('fetch', fetchMock);
+
+      const result = await publishThreadsChain(retryDigest, config, FAST_POLL);
+
+      expect(result.threadIds).toEqual(['p1', 'p2', 'p3']);
+      expect(result.error).toBeUndefined();
+      // Only 6 calls (2 items), not 9 — item1 was never re-attempted.
+      expect(fetchMock).toHaveBeenCalledTimes(6);
+    });
+
+    it('is a no-op returning the existing ids when every item was already published', async () => {
+      const retryDigest = { id: 'd1', content: SAMPLE_CONTENT, threads_thread_ids: JSON.stringify(['p1', 'p2', 'p3']) };
+      const fetchMock = vi.fn();
+      vi.stubGlobal('fetch', fetchMock);
+
+      const result = await publishThreadsChain(retryDigest, config, FAST_POLL);
+
+      expect(result.threadIds).toEqual(['p1', 'p2', 'p3']);
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it('treats missing or malformed threads_thread_ids as a fresh start, not a crash', async () => {
+      const fetchMock = vi.fn()
+        .mockResolvedValueOnce(jsonResponse({ id: 'c1' })).mockResolvedValueOnce(okPoll()).mockResolvedValueOnce(jsonResponse({ id: 'p1' }))
+        .mockResolvedValueOnce(jsonResponse({ id: 'c2' })).mockResolvedValueOnce(okPoll()).mockResolvedValueOnce(jsonResponse({ id: 'p2' }))
+        .mockResolvedValueOnce(jsonResponse({ id: 'c3' })).mockResolvedValueOnce(okPoll()).mockResolvedValueOnce(jsonResponse({ id: 'p3' }));
+      vi.stubGlobal('fetch', fetchMock);
+
+      const malformedDigest = { id: 'd1', content: SAMPLE_CONTENT, threads_thread_ids: 'not valid json' };
+      const result = await publishThreadsChain(malformedDigest, config, FAST_POLL);
+
+      expect(result.threadIds).toEqual(['p1', 'p2', 'p3']);
+      expect(fetchMock).toHaveBeenCalledTimes(9);
+    });
   });
 });
 

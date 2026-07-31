@@ -1,7 +1,8 @@
 /**
- * Threads publisher — republishes the digest's TOP3 items as a Threads
- * reply-chain (lead post + 2 sequential replies + a closing "Full brief:"
- * link reply). See docs/media-pipeline-spec.md §11.
+ * Threads publisher — republishes the digest's TOP3 items as 3 independent,
+ * top-level Threads posts (no reply chain). Each post carries its own
+ * headline + commentary + a trailing "Full brief: <link>" line. See
+ * docs/media-pipeline-spec.md §11.
  *
  * Depends only on the <!--SEG idx=N article_id="..." headline="..."--> /
  * <!--TOP3 [n1,n2,n3]--> markers already emitted by the assembly prompt
@@ -91,22 +92,25 @@ export function trimToThreadsLimit(text, limit = THREADS_POST_LIMIT) {
 }
 
 /**
- * Lead/reply post body: headline + a Threads-native take, no link (per §11.1).
+ * Standalone post body: headline + a Threads-native take + a trailing
+ * "Full brief: <link>" line (per §11.1 — each post is independent, so the
+ * link travels with every post rather than living on its own closing post).
  * Prefers the assembly-time <!--THREADS--> short take (written for this
  * medium, ~420 chars — see assembly_prompt.md §5) over the full commentary.
  * Falls back to trimming the full commentary for older digests assembled
- * before that field existed — trimToThreadsLimit() is still applied either
- * way as a hard safety net against a too-long THREADS take.
+ * before that field existed.
+ *
+ * The link suffix is appended AFTER trimming the headline+body portion, not
+ * before — trimming the combined text as one blob risks truncating the link
+ * itself. Reserving the suffix's length first guarantees the link always
+ * survives intact.
  */
-export function formatItemPost(item) {
+export function formatItemPost(item, canonicalLink, linkText) {
+  const linkSuffix = canonicalLink ? `\n\n${linkText} ${canonicalLink}` : `\n\n${linkText}`;
   const body = item.threadsText || item.commentary;
-  return trimToThreadsLimit(`${item.headline}\n\n${body}`);
-}
-
-/** Closing reply body: "<linkText> <link>". */
-export function formatClosingReply(canonicalLink, linkText) {
-  const text = canonicalLink ? `${linkText} ${canonicalLink}` : linkText;
-  return trimToThreadsLimit(text);
+  const bodyText = `${item.headline}\n\n${body}`;
+  const trimmedBody = trimToThreadsLimit(bodyText, THREADS_POST_LIMIT - linkSuffix.length);
+  return trimmedBody + linkSuffix;
 }
 
 /**
@@ -269,12 +273,19 @@ async function createAndPublishPost(userId, accessToken, { text, replyToId, labe
 }
 
 /**
- * Publishes the digest's TOP3 items as a 4-post Threads reply chain: lead,
- * reply1 (→lead), reply2 (→reply1), closing link (→reply2).
+ * Publishes the digest's TOP3 items as 3 independent, top-level Threads
+ * posts — no reply_to_id, no chain. Each carries its own "Full brief: <link>"
+ * line (see formatItemPost).
  *
- * Stops at the first failure and returns however many post ids the chain
- * reached — never attempts a post whose parent didn't actually publish, so
- * there is no orphaned-reply case to clean up.
+ * Resumable by construction: digest.threads_thread_ids (persisted by
+ * publishers/index.js after every attempt, success or partial) holds exactly
+ * the post ids a prior attempt actually published, in item order. Its length
+ * tells this call how many leading items to skip, so retrying a partial
+ * failure never re-posts an item that already went live. This is safe
+ * because threadIds.push() below only ever runs on createAndPublishPost's
+ * success path — a mid-item failure (container created but never published)
+ * never contributes an entry, so the array is always a contiguous prefix of
+ * items in order, with no gaps and no placeholder ids.
  *
  * @param {Object} [pollOptions] - Overrides for the container-status poll (maxAttempts, intervalMs). Tests shrink these to avoid real delays.
  * @returns {{ threadIds: string[], error?: string, failedAt?: string }}
@@ -291,36 +302,43 @@ export async function publishThreadsChain(digest, config, pollOptions) {
 
   const items = parseTop3Items(digest.content);
   if (items.length < 3) {
-    const error = `Digest content is missing a full TOP3 set (found ${items.length}/3 items) — cannot build a Threads reply chain.`;
+    const error = `Digest content is missing a full TOP3 set (found ${items.length}/3 items) — cannot publish Threads posts.`;
     console.error(`[threads-publisher] ${error}`);
     return { threadIds: [], error };
   }
 
-  const canonicalLink = resolveCanonicalLink(config);
-  const posts = [
-    { label: 'lead', text: formatItemPost(items[0]) },
-    { label: 'reply1', text: formatItemPost(items[1]) },
-    { label: 'reply2', text: formatItemPost(items[2]) },
-    { label: 'closing', text: formatClosingReply(canonicalLink, config.threadsLinkText) },
-  ];
+  let alreadyPublished = [];
+  try {
+    alreadyPublished = JSON.parse(digest.threads_thread_ids || '[]');
+  } catch {
+    alreadyPublished = [];
+  }
+  if (!Array.isArray(alreadyPublished)) alreadyPublished = [];
 
-  console.log(`[threads-publisher] Starting chain for digest ${digest.id} (${posts.length} posts)`);
-
-  const threadIds = [];
-  let replyToId = null;
-
-  for (const post of posts) {
-    console.log(`[threads-publisher] Chain position: "${post.label}" (${threadIds.length + 1}/${posts.length})`);
-    const result = await createAndPublishPost(userId, accessToken, { text: post.text, replyToId, label: post.label }, pollOptions);
-    if (result.error) {
-      const error = `Threads chain stopped at "${post.label}": ${result.error}`;
-      console.error(`[threads-publisher] ${error}`);
-      return { threadIds, error, failedAt: post.label };
-    }
-    threadIds.push(result.postId);
-    replyToId = result.postId;
+  const remainingItems = items.slice(alreadyPublished.length);
+  if (remainingItems.length === 0) {
+    console.log(`[threads-publisher] Digest ${digest.id}: all ${items.length} items already published, nothing to resume.`);
+    return { threadIds: alreadyPublished };
   }
 
-  console.log(`[threads-publisher] Chain complete for digest ${digest.id}: ${threadIds.join(', ')}`);
+  const canonicalLink = resolveCanonicalLink(config);
+  const threadIds = [...alreadyPublished];
+
+  console.log(`[threads-publisher] Starting for digest ${digest.id}: ${remainingItems.length}/${items.length} item(s) remaining (${alreadyPublished.length} already published)`);
+
+  for (const [i, item] of remainingItems.entries()) {
+    const label = `item${alreadyPublished.length + i + 1}`;
+    const text = formatItemPost(item, canonicalLink, config.threadsLinkText);
+    console.log(`[threads-publisher] Position: "${label}" (${threadIds.length + 1}/${items.length})`);
+    const result = await createAndPublishPost(userId, accessToken, { text, replyToId: null, label }, pollOptions);
+    if (result.error) {
+      const error = `Threads publish stopped at "${label}": ${result.error}`;
+      console.error(`[threads-publisher] ${error}`);
+      return { threadIds, error, failedAt: label };
+    }
+    threadIds.push(result.postId);
+  }
+
+  console.log(`[threads-publisher] Complete for digest ${digest.id}: ${threadIds.join(', ')}`);
   return { threadIds };
 }

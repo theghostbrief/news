@@ -70,16 +70,18 @@ export function initDb(dbPath) {
   }
   if (!digestCols.has('threads_status')) {
     // 'published' | 'failed' | NULL (never attempted) — same contract as
-    // facebook_status: only 'published' when the FULL 4-post chain (lead +
-    // 2 replies + closing link) succeeded, never on a partial chain.
+    // facebook_status: only 'published' when all 3 standalone TOP3 posts
+    // succeeded, never on a partial run.
     db.exec('ALTER TABLE digests ADD COLUMN threads_status TEXT');
   }
   if (!digestCols.has('threads_error')) {
     db.exec('ALTER TABLE digests ADD COLUMN threads_error TEXT');
   }
   if (!digestCols.has('threads_thread_ids')) {
-    // JSON array of however many post ids the chain reached before stopping
-    // (0-4 entries) — same idea as duplicate_review.groups: JSON in a TEXT column.
+    // JSON array of however many post ids succeeded before stopping (0-3
+    // entries), in item order — also read back on the next attempt to resume
+    // instead of re-posting items that already went live. Same idea as
+    // duplicate_review.groups: JSON in a TEXT column.
     db.exec('ALTER TABLE digests ADD COLUMN threads_thread_ids TEXT');
   }
 

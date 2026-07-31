@@ -511,25 +511,30 @@ Intro/outro (5 s each) — one-time asset, stored in `assets/brand/`.
 
 ## 11. Threads publishing (parallel track — no media-pipeline dependencies)
 
-Republishes the digest's existing TOP3 items as a Threads reply-chain.
-Generates no media and depends on nothing in §§2-7 (segments, TTS, video,
-etc.) — it only needs a `draft` digest with the `<!--TOP3 [n1,n2,n3]-->`
-marker already in the assembled text (already emitted today, per §5). Can
-ship alongside or before P1; not part of the P1–P6 sequence.
+Republishes the digest's existing TOP3 items as 3 independent, top-level
+Threads posts (no reply chain — changed from the original reply-chain design
+after review; see 11.1). Generates no media and depends on nothing in §§2-7
+(segments, TTS, video, etc.) — it only needs a `draft` digest with the
+`<!--TOP3 [n1,n2,n3]-->` marker already in the assembled text (already
+emitted today, per §5). Can ship alongside or before P1; not part of the
+P1–P6 sequence.
 
 ### 11.1 Format
-- Lead post: TOP3 item #1 — headline + commentary, trimmed to Threads' post
-  character limit (currently 500 chars), no link.
-- Reply 1: TOP3 item #2, posted as a reply to the lead post (`reply_to_id`).
-- Reply 2: TOP3 item #3, posted as a reply to Reply 1 — chained sequentially
-  (each reply answers the previous post, not all replying to the lead), the
-  way a human reply-thread reads.
-- Closing reply: "Full brief: <link>" — reuses whatever canonical link the
-  digest already has (site URL once §4.9/P3 ships; Telegram channel/post
-  link until then).
+- 3 standalone, top-level posts — one per TOP3 item, no `reply_to_id`, no
+  chaining. Each post is headline + a Threads-native take (or the trimmed
+  full commentary as a fallback for older digests), trimmed to Threads' post
+  character limit (currently 500 chars), with a trailing "Full brief: <link>"
+  line on every post — since posts aren't chained, the link has to travel
+  with each one rather than living on a single closing post at the end of a
+  thread. The link is appended after trimming the headline+body portion (its
+  length is reserved first), so trimming never truncates the link itself.
 - Reuses the existing `<!--TOP3 [n1,n2,n3]-->` marker (§5) — no prompt
   changes needed. Marker stripping before posting reuses the existing
   `stripDigestMarkers()` (`digest-format.js`) pattern, same as Telegram/FB.
+- Retry is resumable: `threads_thread_ids` (11.4) is read back on every call
+  and its length tells the publisher how many leading items to skip, so a
+  retry after a partial failure never re-posts an item that already went
+  live.
 
 ### 11.2 Auth
 - Threads has its own API (`graph.threads.net`), separate from the Facebook
@@ -550,30 +555,34 @@ ship alongside or before P1; not part of the P1–P6 sequence.
 - `services/publishers/threads-publisher.js` — registered in
   `publishers/index.js` under platform name `threads`, alongside
   `facebook.js`/`telegram.js`.
-- `publishThreadsChain(digest, config) -> {threadIds: [leadId, reply1Id, reply2Id, closingId]}`.
+- `publishThreadsChain(digest, config) -> {threadIds: [item1Id, item2Id, item3Id]}`.
   Threads' publish flow is two-step per post (create a container, then
   publish it) — same shape as Instagram's Graph API container flow.
-- A failure partway through the chain must not silently leave an orphaned
-  reply — stop and record how far it got (see status, below).
+- A failure partway through must not silently drop the items that already
+  published — stop, record how far it got (see status, below), and resume
+  from there on the next attempt instead of re-posting from item 1.
 
 ### 11.4 Status tracking — mirrors the Facebook pattern, not publish_queue
 `publish_queue` (§3) is shaped for scheduled, retryable media posts
 (`media_path TEXT NOT NULL`, `publish_at` for staggered timing) — built for
-reels in P4. A Threads reply-chain is neither scheduled nor media-based; it
-publishes immediately, alongside the existing Telegram/Facebook step. It
+reels in P4. The 3 Threads posts are neither scheduled nor media-based; they
+publish immediately, alongside the existing Telegram/Facebook step. It
 follows the Facebook/Telegram pattern instead: new `digests` columns
 `threads_status` ('published'|'failed'|NULL), `threads_error`,
-`threads_thread_ids` (JSON array of the chain's post IDs) — mirrors the
-existing truthful `facebook_status`/`facebook_error` columns exactly (never
-`'published'` on a partial chain). Fires from the same `publishDigest()` call
-in `publishers/index.js` that already handles Telegram/Facebook. No
-`publish_queue` involvement; retry = re-trigger publish, same UX as the
-existing FB retry affordance. Dashboard: a `✓ Threads`/`✗ Threads` indicator
-next to the existing TG/FB buttons, same pattern as `facebook_status`.
+`threads_thread_ids` (JSON array of however many post IDs succeeded, 0-3, in
+item order) — mirrors the existing truthful `facebook_status`/`facebook_error`
+columns exactly (never `'published'` on a partial run). Fires from the same
+`publishDigest()` call in `publishers/index.js` that already handles
+Telegram/Facebook. No `publish_queue` involvement; retry = re-trigger
+publish, same UX as the existing FB retry affordance — `threads_thread_ids`
+doubles as the resume marker (11.1, 11.3), so retrying only attempts the
+items that never actually posted. Dashboard: a `✓ Threads`/`✗ Threads`
+indicator next to the existing TG/FB buttons, same pattern as
+`facebook_status`.
 
 ### 11.5 `.env` additions
 ```
 THREADS_USER_ID=
 THREADS_ACCESS_TOKEN=
-THREADS_LINK_TEXT=Full brief:      # prefix for the closing reply's link line
+THREADS_LINK_TEXT=Full brief:      # prefix for the link line appended to every post
 ```
