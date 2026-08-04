@@ -179,3 +179,36 @@ describe('fetchViaJinaReader — AbuseAlleviationError detection', () => {
     expect(err.message).toMatch(/Jina Reader HTTP 500/);
   });
 });
+
+function emptyBodyResponse() {
+  return {
+    ok: true,
+    body: { getReader: () => ({ read: async () => ({ done: true, value: undefined }) }) },
+  };
+}
+
+describe('fetchViaJinaReader — apiKey header', () => {
+  it('sends an Authorization: Bearer header when an apiKey is passed', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(emptyBodyResponse());
+    vi.stubGlobal('fetch', fetchMock);
+
+    await fetchViaJinaReader('https://example.com/x', 'secret-key').catch(() => {});
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ headers: { Authorization: 'Bearer secret-key' } })
+    );
+  });
+
+  it('sends no Authorization header when apiKey is omitted (anonymous, as before)', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(emptyBodyResponse());
+    vi.stubGlobal('fetch', fetchMock);
+
+    await fetchViaJinaReader('https://example.com/x').catch(() => {});
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ headers: undefined })
+    );
+  });
+});

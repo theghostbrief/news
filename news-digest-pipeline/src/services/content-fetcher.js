@@ -88,7 +88,7 @@ async function processFetchTick(config, limit) {
       if (isKnownBlockedDomain(hostname)) {
         if (config.jinaReaderFallback) {
           try {
-            const { title, content } = await fetchViaJinaReader(article.url);
+            const { title, content } = await fetchViaJinaReader(article.url, config.jinaApiKey);
             markArticleFetched(article.id, { title, content });
             console.log(`[content-fetcher] Fetched via Jina Reader fallback: ${article.url} (${content.length} chars)`);
             await checkReadyAndPrompt(config);

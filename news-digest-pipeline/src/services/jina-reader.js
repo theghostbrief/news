@@ -38,12 +38,18 @@ export class JinaAbuseBlockError extends Error {
  * Opt-in only (JINA_READER_FALLBACK=true) — this sends the article URL to a
  * third-party service, which content-fetcher.js only does for domains it
  * already knows a direct fetch can never reach (see KNOWN_BLOCKED_DOMAINS).
+ *
+ * `apiKey` (config.jinaApiKey / JINA_API_KEY) is optional — when present it's
+ * sent as a Bearer token, which moves the request off Jina's anonymous rate
+ * limit (anonymous requests get abuse-blocked on perplexity.ai, see
+ * JinaAbuseBlockError above). When absent, fetches anonymously as before.
  */
-export async function fetchViaJinaReader(articleUrl) {
+export async function fetchViaJinaReader(articleUrl, apiKey) {
   const v = validateArticleUrl(articleUrl);
   if (!v.ok) throw new Error(`Refusing to proxy via Jina Reader: ${v.error}`);
 
   const response = await fetch(JINA_READER_PREFIX + v.href, {
+    headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : undefined,
     signal: AbortSignal.timeout(TIMEOUT_MS),
   });
   if (!response.ok) {

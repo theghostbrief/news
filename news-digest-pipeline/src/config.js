@@ -178,6 +178,11 @@ function buildConfig() {
     // the fetch through https://r.jina.ai/, a third-party service. Off by
     // default since it means sending article URLs to that service.
     jinaReaderFallback: (process.env.JINA_READER_FALLBACK || 'false') === 'true',
+    // Optional Bearer token for r.jina.ai — moves Jina Reader requests off
+    // its anonymous rate limit (anonymous gets abuse-blocked on
+    // perplexity.ai, see JinaAbuseBlockError in jina-reader.js). Unset ==
+    // fetch anonymously, same as before this existed.
+    jinaApiKey: process.env.JINA_API_KEY || '',
 
     // Active scenario: 'ghost' (English, production default), 'sarcastic', or
     // 'architect' (Krol's Russian scenarios, kept as reference/fallback). Each
