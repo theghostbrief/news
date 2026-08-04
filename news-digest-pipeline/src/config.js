@@ -207,6 +207,10 @@ function buildConfig() {
     // Telegram channel link).
     threadsLinkUrl: process.env.THREADS_LINK_URL || '',
 
+    // Public origin card PNGs are served from (see card-generator.js). Empty
+    // by default → card generation is skipped and publishing stays text-only.
+    publicMediaBaseUrl: process.env.PUBLIC_MEDIA_BASE_URL || '',
+
     // Planned integrations (placeholders for status display only — pipelines
     // are not implemented yet).
     instagramAccessToken: process.env.INSTAGRAM_ACCESS_TOKEN || '',

@@ -41,6 +41,7 @@ CREATE TABLE IF NOT EXISTS digests (
   threads_status TEXT,
   threads_error TEXT,
   threads_thread_ids TEXT,
+  cards_json TEXT,
   created_at TEXT DEFAULT (datetime('now')),
   updated_at TEXT DEFAULT (datetime('now'))
 );

@@ -271,6 +271,73 @@ describe('publishThreadsChain', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  describe('card image attachment (cards_json)', () => {
+    it('creates an IMAGE container with image_url + caption when a card exists for the item', async () => {
+      const cards = [
+        { idx: 3, articleId: 'e5f6', url: 'https://theghostbrief.com/media/cards/d1/top-3.png' },
+        { idx: 1, articleId: 'a1b2', url: 'https://theghostbrief.com/media/cards/d1/top-1.png' },
+        { idx: 2, articleId: 'c3d4', url: 'https://theghostbrief.com/media/cards/d1/top-2.png' },
+      ];
+      const digestWithCards = { id: 'd1', content: SAMPLE_CONTENT, cards_json: JSON.stringify(cards) };
+      const fetchMock = vi.fn()
+        .mockResolvedValueOnce(jsonResponse({ id: 'c1' })).mockResolvedValueOnce(okPoll()).mockResolvedValueOnce(jsonResponse({ id: 'p1' }))
+        .mockResolvedValueOnce(jsonResponse({ id: 'c2' })).mockResolvedValueOnce(okPoll()).mockResolvedValueOnce(jsonResponse({ id: 'p2' }))
+        .mockResolvedValueOnce(jsonResponse({ id: 'c3' })).mockResolvedValueOnce(okPoll()).mockResolvedValueOnce(jsonResponse({ id: 'p3' }));
+      vi.stubGlobal('fetch', fetchMock);
+
+      const result = await publishThreadsChain(digestWithCards, config, FAST_POLL);
+
+      expect(result.threadIds).toEqual(['p1', 'p2', 'p3']);
+
+      // Items post in TOP3 array order [3,1,2] — first create call is idx=3.
+      const item1CreateBody = JSON.parse(fetchMock.mock.calls[0][1].body);
+      expect(item1CreateBody.media_type).toBe('IMAGE');
+      expect(item1CreateBody.image_url).toBe('https://theghostbrief.com/media/cards/d1/top-3.png');
+      expect(item1CreateBody.text).toBeTruthy(); // caption still present alongside the image
+
+      const item2CreateBody = JSON.parse(fetchMock.mock.calls[3][1].body);
+      expect(item2CreateBody.media_type).toBe('IMAGE');
+      expect(item2CreateBody.image_url).toBe('https://theghostbrief.com/media/cards/d1/top-1.png');
+    });
+
+    it('falls back to a TEXT container when cards_json is absent, empty, or malformed', async () => {
+      for (const cardsJson of [undefined, '[]', 'not valid json']) {
+        const digestNoCards = { id: 'd1', content: SAMPLE_CONTENT, cards_json: cardsJson };
+        const fetchMock = vi.fn()
+          .mockResolvedValueOnce(jsonResponse({ id: 'c1' })).mockResolvedValueOnce(okPoll()).mockResolvedValueOnce(jsonResponse({ id: 'p1' }))
+          .mockResolvedValueOnce(jsonResponse({ id: 'c2' })).mockResolvedValueOnce(okPoll()).mockResolvedValueOnce(jsonResponse({ id: 'p2' }))
+          .mockResolvedValueOnce(jsonResponse({ id: 'c3' })).mockResolvedValueOnce(okPoll()).mockResolvedValueOnce(jsonResponse({ id: 'p3' }));
+        vi.stubGlobal('fetch', fetchMock);
+
+        const result = await publishThreadsChain(digestNoCards, config, FAST_POLL);
+
+        expect(result.threadIds).toEqual(['p1', 'p2', 'p3']);
+        const item1CreateBody = JSON.parse(fetchMock.mock.calls[0][1].body);
+        expect(item1CreateBody.media_type).toBe('TEXT');
+        expect(item1CreateBody.image_url).toBeUndefined();
+
+        vi.unstubAllGlobals();
+      }
+    });
+
+    it('mixes IMAGE and TEXT containers when only some items have a matching card idx', async () => {
+      // Only idx=1 has a card; idx=3 and idx=2 (the other two TOP3 items) don't.
+      const cards = [{ idx: 1, articleId: 'a1b2', url: 'https://theghostbrief.com/media/cards/d1/top-1.png' }];
+      const digestPartialCards = { id: 'd1', content: SAMPLE_CONTENT, cards_json: JSON.stringify(cards) };
+      const fetchMock = vi.fn()
+        .mockResolvedValueOnce(jsonResponse({ id: 'c1' })).mockResolvedValueOnce(okPoll()).mockResolvedValueOnce(jsonResponse({ id: 'p1' }))
+        .mockResolvedValueOnce(jsonResponse({ id: 'c2' })).mockResolvedValueOnce(okPoll()).mockResolvedValueOnce(jsonResponse({ id: 'p2' }))
+        .mockResolvedValueOnce(jsonResponse({ id: 'c3' })).mockResolvedValueOnce(okPoll()).mockResolvedValueOnce(jsonResponse({ id: 'p3' }));
+      vi.stubGlobal('fetch', fetchMock);
+
+      await publishThreadsChain(digestPartialCards, config, FAST_POLL);
+
+      // TOP3 order is [3,1,2] — item at position 2 (index 1) is idx=1, the one with a card.
+      const bodies = [0, 3, 6].map((i) => JSON.parse(fetchMock.mock.calls[i][1].body));
+      expect(bodies.map((b) => b.media_type)).toEqual(['TEXT', 'IMAGE', 'TEXT']);
+    });
+  });
+
   describe('resuming a retried run (threads_thread_ids)', () => {
     it('skips already-published items and only posts the remaining ones', async () => {
       const retryDigest = { id: 'd1', content: SAMPLE_CONTENT, threads_thread_ids: JSON.stringify(['p1']) };

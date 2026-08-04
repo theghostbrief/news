@@ -126,6 +126,11 @@ app.use('/admin', express.static(join(__dirname, 'public')));
 // URL people actually have.
 app.use(express.static(join(__dirname, 'public-site')));
 
+// TOP3 headline card PNGs (card-generator.js), public/unauthenticated so
+// Threads/IG's Graph API can fetch image_url directly. Served from the
+// ./data volume (not src/public-site) so cards survive a redeploy.
+app.use('/media/cards', express.static(join(__dirname, '..', 'data', 'media', 'cards')));
+
 // Auth status/login — public (status is read-only; login triggers Basic Auth)
 app.use('/api/auth', loginLimiter, authRouter);
 

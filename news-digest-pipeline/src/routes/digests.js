@@ -7,6 +7,7 @@ import {
 } from '../db/index.js';
 import { generateDigest } from '../services/digest-generator.js';
 import { publishDigest } from '../services/publishers/index.js';
+import { ensureTop3CardUrls } from '../services/card-generator.js';
 import { getDb } from '../db/index.js';
 import config from '../config.js';
 import { showFull, publicDigest, publicArticle, clampLimit } from './public-dto.js';
@@ -129,6 +130,10 @@ router.post('/:id/publish', async (req, res) => {
     if (!digest.content) {
       return res.status(400).json({ error: 'Digest has no content to publish' });
     }
+
+    // Best-effort — a card-generation failure must never block text publishing.
+    // See ensureTop3CardUrls() for the idempotent/skip-if-already-set contract.
+    await ensureTop3CardUrls(digest, config);
 
     const { platforms } = req.body || {};
     const results = await publishDigest(digest, config, platforms);

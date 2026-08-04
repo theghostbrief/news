@@ -90,6 +90,13 @@ export function initDb(dbPath) {
     // duplicate_review.groups: JSON in a TEXT column.
     db.exec('ALTER TABLE digests ADD COLUMN threads_thread_ids TEXT');
   }
+  if (!digestCols.has('cards_json')) {
+    // JSON array of {idx, articleId, url} for the 3 TOP3 headline card PNGs
+    // (card-generator.js), set once at first publish attempt and reused on
+    // retries — publisher-agnostic so Threads and a future IG publisher both
+    // read this same field. NULL until PUBLIC_MEDIA_BASE_URL is configured.
+    db.exec('ALTER TABLE digests ADD COLUMN cards_json TEXT');
+  }
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS threads_token_state (
@@ -255,7 +262,7 @@ export function updateDigest(id, fields) {
   const allowed = ['content', 'status', 'generation_log', 'published_at',
     'facebook_post_id', 'facebook_status', 'facebook_error', 'telegram_message_id', 'youtube_post_id', 'articles_count',
     'model', 'input_tokens', 'output_tokens', 'cost_usd', 'script_warning',
-    'threads_status', 'threads_error', 'threads_thread_ids'];
+    'threads_status', 'threads_error', 'threads_thread_ids', 'cards_json'];
   const updates = [];
   const values = [];
 

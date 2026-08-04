@@ -10,12 +10,17 @@ WORKDIR /app
 #     node-gyp when npm's registry has no prebuilt binary for the exact
 #     Node patch version baked into this image; without these the install
 #     fails outright instead of just being slower.
+#   - fontconfig/fonts-dejavu-core: bookworm-slim ships no fonts at all, so
+#     sharp's SVG text rendering (card-generator.js) would render blank —
+#     DejaVu Sans is the fallback in FONT_FAMILY and is ~1.7MB.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     wget \
     ca-certificates \
     python3 \
     make \
     g++ \
+    fontconfig \
+    fonts-dejavu-core \
     && rm -rf /var/lib/apt/lists/*
 
 COPY package*.json ./

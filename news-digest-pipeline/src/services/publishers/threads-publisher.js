@@ -131,9 +131,17 @@ export function resolveCanonicalLink(config) {
 // before it reaches status FINISHED fails with an opaque "resource does not
 // exist" error (confirmed against the real API 2026-07-27) — pollContainerStatus()
 // below closes that gap.
-async function createContainer(userId, accessToken, { text, replyToId }) {
+//
+// media_type is IMAGE (with image_url + text as the caption) when a card is
+// available, TEXT otherwise — imageUrl is only ever set when card-generator.js
+// successfully produced and stored a public URL for this item (see
+// ensureTop3CardUrls() / cards_json), so this never points Threads at a URL
+// that might 404.
+async function createContainer(userId, accessToken, { text, replyToId, imageUrl }) {
   const url = `${THREADS_API_BASE}/${userId}/threads`;
-  const body = { media_type: 'TEXT', text, access_token: accessToken };
+  const body = imageUrl
+    ? { media_type: 'IMAGE', image_url: imageUrl, text, access_token: accessToken }
+    : { media_type: 'TEXT', text, access_token: accessToken };
   if (replyToId) body.reply_to_id = replyToId;
 
   let response;
@@ -247,9 +255,9 @@ async function publishContainer(userId, accessToken, containerId) {
   return { postId: data.id };
 }
 
-async function createAndPublishPost(userId, accessToken, { text, replyToId, label }, pollOptions) {
-  console.log(`[threads-publisher] [${label}] Creating container${replyToId ? ` (reply to ${replyToId})` : ''}...`);
-  const created = await createContainer(userId, accessToken, { text, replyToId });
+async function createAndPublishPost(userId, accessToken, { text, replyToId, imageUrl, label }, pollOptions) {
+  console.log(`[threads-publisher] [${label}] Creating container${replyToId ? ` (reply to ${replyToId})` : ''}${imageUrl ? ' with card image' : ''}...`);
+  const created = await createContainer(userId, accessToken, { text, replyToId, imageUrl });
   if (created.error) {
     console.error(`[threads-publisher] [${label}] Container create failed: ${created.error}`);
     return { error: created.error };
@@ -307,6 +315,24 @@ export async function publishThreadsChain(digest, config, pollOptions) {
     return { threadIds: [], error };
   }
 
+  // Attach each item's card image URL (card-generator.js's ensureTop3CardUrls,
+  // called before publishDigest() in routes/digests.js) by idx. Absent/empty/
+  // malformed cards_json (card generation skipped or failed) just leaves every
+  // item.imageUrl undefined — createContainer() falls back to a TEXT post, so
+  // a card-generation problem never blocks Threads publishing.
+  let cardsByIdx = new Map();
+  try {
+    const cards = JSON.parse(digest.cards_json || '[]');
+    if (Array.isArray(cards)) {
+      cardsByIdx = new Map(cards.map((c) => [c.idx, c.url]));
+    }
+  } catch {
+    cardsByIdx = new Map();
+  }
+  for (const item of items) {
+    item.imageUrl = cardsByIdx.get(item.idx) || null;
+  }
+
   let alreadyPublished = [];
   try {
     alreadyPublished = JSON.parse(digest.threads_thread_ids || '[]');
@@ -330,7 +356,7 @@ export async function publishThreadsChain(digest, config, pollOptions) {
     const label = `item${alreadyPublished.length + i + 1}`;
     const text = formatItemPost(item, canonicalLink, config.threadsLinkText);
     console.log(`[threads-publisher] Position: "${label}" (${threadIds.length + 1}/${items.length})`);
-    const result = await createAndPublishPost(userId, accessToken, { text, replyToId: null, label }, pollOptions);
+    const result = await createAndPublishPost(userId, accessToken, { text, replyToId: null, imageUrl: item.imageUrl, label }, pollOptions);
     if (result.error) {
       const error = `Threads publish stopped at "${label}": ${result.error}`;
       console.error(`[threads-publisher] ${error}`);
