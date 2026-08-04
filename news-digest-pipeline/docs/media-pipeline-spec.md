@@ -7,6 +7,8 @@ self-hosted podcast RSS feed, and 3 staggered vertical reels per digest.
 **MVP scope:** 1 edition (English), 1 digest block per day (~15 news items, ~10 min video).
 Architecture must support N editions later (edition = config row, not code changes).
 
+> **Status:** see §9 for what's shipped and the current roadmap.
+
 ---
 
 ## 1. Design principles
@@ -159,13 +161,25 @@ no classes unless the repo uses them).
 - Tier 3 fallback: call `card-generator.js`.
 - Target 1–3 visuals per segment; 1 is fine.
 
-### 4.4 `services/card-generator.js`
-- `makeHeadlineCard(headline, editionCfg, {vertical=false}) -> path`
-- Sharp-based composition (same as Pro Instagram module pattern): brand background
-  (static PNG from `assets/brand/` or optional fal.ai/Recraft generated background,
-  env `CARD_BG=static|generated`), headline text auto-wrapped, channel logo,
-  16:9 (1920×1080) or 9:16 (1080×1920).
-- Also produces the YouTube thumbnail (1280×720) from the top-1 news headline.
+### 4.4 `services/card-generator.js` — **[SHIPPED 2026-08-04, narrower than originally spec'd]**
+- As built: TOP3-only, 1080×1080 square cards for IG/Threads — not the general
+  16:9/9:16 headline-card + YouTube-thumbnail module originally spec'd here.
+  That broader scope is unbuilt; revisit if still wanted once video (§4.5) ships.
+- `renderTop3Card({headline, confidenceText}) -> Buffer` — sharp+SVG composition:
+  dark branded background, wrapped/auto-sized headline, OSINT confidence-marker
+  pill (confirmed / claimed by &lt;side&gt; / unverified, parsed from the item's
+  own commentary), Ghost logo (`src/assets/ghost-logo.png`) in the corner.
+- `makeTop3Cards(content, outDir) -> [{idx, articleId, path}]` — renders all 3
+  TOP3 items, reusing `parseTop3Items()` from `threads-publisher.js` instead of
+  a second marker parser.
+- `ensureTop3CardUrls(digest, config) -> [{idx, articleId, url}]` — idempotent,
+  best-effort entry point called at publish time (`POST /:id/publish`). Writes
+  to `data/media/cards/<digest_id>/` (under the `./data` volume — unlike
+  `src/public-site/`, which is baked into the image and wiped on redeploy),
+  persists `digests.cards_json`, and degrades to `[]` (text-only publish) on
+  any failure or when `PUBLIC_MEDIA_BASE_URL` isn't set — never blocks publishing.
+- `cards_json` is publisher-agnostic by design: Threads reads it today (§11),
+  Instagram (§9 roadmap #1) will read the same field.
 
 ### 4.5 `services/video-builder.js`
 - `buildVideo(digestId) -> {videoPath}` — the 16:9 master.
@@ -470,25 +484,54 @@ REEL_OFFSETS_MIN=30,240,540      # minutes after digest publish
 
 ---
 
-## 9. Build order (each phase independently shippable)
+## 9. Roadmap (status + build order)
 
-1. **P1 — Segments + TTS + podcast.** segmenter, tts, buildPodcastAudio,
-   podcast publisher, dashboard badge. Deliverable: daily podcast episode.
-2. **P2 — Video master + YouTube.** visual-sourcer (Tier 1+3), card-generator,
-   video-builder, subtitles, youtube-video publisher, thumbnail. Deliverable:
-   daily 10-min YouTube video with chapters.
-3. **P3 — Website.** site publisher, FB/TG text now links to site; YouTube
-   embed back-fill. Deliverable: canonical site with SEO basics.
-4. **P4 — Reels.** reel-builder, top-3 ranking parse, publish_queue scheduler,
-   FB Reels + YouTube Shorts publishers. Deliverable: 3 staggered reels/day.
-5. **P5 — external posts as source (FB + Telegram).** fb-post-fetcher,
-   tg-post-fetcher, bot forward-handler, ingestion route + URL acceptance,
-   author columns, "external author" prompt partial, dashboard manual-paste
-   fallback. Deliverable: forward a TG post or paste a FB/TG link → it appears
-   in the next digest with attribution. (Build TG Route A first — it is the
-   simplest and most reliable piece of the whole phase.)
-6. **P6 — hardening.** resume-from-stage tests, cost dashboard, edition config
-   plumbed end-to-end (still single 'en' edition active).
+### Shipped
+- **Public reader page** — `theghostbrief.com` root serves published digests
+  (dashboard moved to `/admin`). Site publisher's fuller original scope in §4.9
+  (sitemap/RSS, OG meta, YouTube embed back-fill) is not built — see "Website
+  images" and "Public page design pass" below for the two concrete gaps.
+- **Threads publishing** (§11) — standalone TOP3 posts (not a reply chain),
+  auto-refreshed token, now attaches the TOP3 card image (§4.4) when available.
+- **Facebook + Telegram publishing** — pre-existing core publishers (predate
+  this spec), unaffected by the media pipeline work.
+- **TOP3 branded card generator** (§4.4) — 1080×1080 IG/Threads cards, narrower
+  than the originally spec'd general-purpose module (see §4.4 for what changed).
+- **Jina API key for Perplexity fetch** — moves Jina Reader off the anonymous
+  rate limit (`JINA_API_KEY`). Outside media-pipeline scope; recorded here for
+  continuity with the rest of this status list.
+
+### Next up, in order
+1. **Instagram TOP3 auto-posting.** Image (the existing TOP3 card) + caption
+   per top-3 item via the Meta Graph API — same container→publish flow as
+   Threads (§11.3), reusing the existing System User token rather than a new
+   auth flow. Build the immediate/synchronous version first (post all 3 back
+   to back, like Threads today) — no scheduling yet.
+2. **Staggered post scheduling.** 10–20 min delays between the 3 TOP3 posts,
+   applied to both IG and Threads. A layer on top of #1, not a prerequisite
+   for it: one `publish_queue` row per post (table already defined in §3;
+   `kind` already anticipates values beyond the reel kinds listed there) with
+   a small poller picking up due rows, replacing the immediate back-to-back
+   posting from #1.
+3. **Website images.** Populate `articles.image_url` (column already exists,
+   unpopulated — see the migration note in `db/index.js`): capture at fetch
+   time, render on the public reader page.
+4. **Public page design pass.** `src/public-site/index.html`'s visual design
+   (currently a plain cream/violet reader layout).
+5. **P1 audio — segment TTS + podcast RSS.** `segmenter.js` already ships
+   (built for the public reader page — parses the same SEG/TOP3 markers this
+   whole pipeline depends on). Remaining: `tts.js`, `buildPodcastAudio`,
+   podcast publisher (§4.8), dashboard badge.
+
+### Not yet scheduled (original spec scope, still valid, deprioritized)
+- **Video master + YouTube** (§4.5, §4.7) — Ken Burns slideshow assembly,
+  subtitle burn-in, YouTube upload with chapters.
+- **Reels** (§4.6) — vertical 1080×1920 cuts of TOP3 segments, FB Reels +
+  YouTube Shorts.
+- **External posts as source** (§4.11, §4.11b) — forwarding a Telegram post or
+  pasting an FB/TG link so it's ingested with attribution.
+- **Hardening** — resume-from-stage tests, cost dashboard, edition config
+  plumbed end-to-end.
 
 ---
 
@@ -509,7 +552,7 @@ Intro/outro (5 s each) — one-time asset, stored in `assets/brand/`.
 
 ---
 
-## 11. Threads publishing (parallel track — no media-pipeline dependencies)
+## 11. Threads publishing (parallel track — no media-pipeline dependencies) — **[SHIPPED]**
 
 Republishes the digest's existing TOP3 items as 3 independent, top-level
 Threads posts (no reply chain — changed from the original reply-chain design
