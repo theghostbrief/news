@@ -151,17 +151,17 @@ function buildSettingsPayload() {
         linkText: config.threadsLinkText,
         linkUrl: config.threadsLinkUrl || null,
       },
+      instagram: {
+        accountId: maskSecret(config.instagramAccountId),
+        accessToken: maskSecret(config.instagramAccessToken),
+        linkText: config.instagramLinkText,
+      },
       anthropicApiKey: maskSecret(config.anthropicApiKey),
       openaiApiKey: maskSecret(config.openaiApiKey),
       falKey: maskSecret(config.falKey),
       // Planned integrations — pipelines not implemented yet, status only.
       // Secrets are not editable via API (only via .env), like all other secrets.
       planned: {
-        instagram: {
-          accessToken: maskSecret(config.instagramAccessToken),
-          accountId: maskSecret(config.instagramAccountId),
-          status: 'Pipeline not implemented — needs to be added',
-        },
         tiktok: {
           accessToken: maskSecret(config.tiktokAccessToken),
           status: 'Pipeline not implemented — needs to be added',

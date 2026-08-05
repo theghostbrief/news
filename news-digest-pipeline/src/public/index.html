@@ -639,8 +639,18 @@
             ? `<button class="plat-btn sent" disabled>✓ Threads</button>`
             : `<button class="plat-btn${threadsFailed ? ' failed' : ''}" onclick="publishPlatform('${d.id}','threads',this)" title="${threadsFailed ? esc(d.threads_error || 'Threads publish failed') : ''}">${threadsFailed ? '✗ Threads' : '🧵 Threads'}</button>`;
 
+          // Same "sent only if all 3" contract as Threads (instagram_status
+          // mirrors threads_status — never 'published' on a partial run).
+          let instagramIds = [];
+          try { instagramIds = d.instagram_media_ids ? JSON.parse(d.instagram_media_ids) : []; } catch { instagramIds = []; }
+          const instagramSent = instagramIds.length === 3;
+          const instagramFailed = !instagramSent && d.instagram_status === 'failed';
+          const instagramBtn = instagramSent
+            ? `<button class="plat-btn sent" disabled>✓ IG</button>`
+            : `<button class="plat-btn${instagramFailed ? ' failed' : ''}" onclick="publishPlatform('${d.id}','instagram',this)" title="${instagramFailed ? esc(d.instagram_error || 'Instagram publish failed') : ''}">${instagramFailed ? '✗ IG' : '📷 IG'}</button>`;
+
           const delBtn = `<button class="btn-delete" onclick="deleteDigest('${d.id}')">✕</button>`;
-          actionBtn = `<div class="platform-row"><button class="btn btn-preview" onclick="previewDigest('${d.id}')">&#128065;</button>${tgBtn}${fbBtn}${threadsBtn}<button class="btn btn-copy" onclick="copyDigest('${d.id}', this)">&#128203;</button>${delBtn}</div>`;
+          actionBtn = `<div class="platform-row"><button class="btn btn-preview" onclick="previewDigest('${d.id}')">&#128065;</button>${tgBtn}${fbBtn}${threadsBtn}${instagramBtn}<button class="btn btn-copy" onclick="copyDigest('${d.id}', this)">&#128203;</button>${delBtn}</div>`;
         }
 
         // Status dropdown
@@ -710,9 +720,9 @@
     }
 
     async function publishPlatform(id, platform, btn) {
-      const names = { telegram: 'Telegram', facebook: 'Facebook', threads: 'Threads' };
-      const idleLabel = { telegram: '📨 TG', facebook: '📘 FB', threads: '🧵 Threads' };
-      const sentLabel = { telegram: '✓ TG', facebook: '✓ FB', threads: '✓ Threads' };
+      const names = { telegram: 'Telegram', facebook: 'Facebook', threads: 'Threads', instagram: 'Instagram' };
+      const idleLabel = { telegram: '📨 TG', facebook: '📘 FB', threads: '🧵 Threads', instagram: '📷 IG' };
+      const sentLabel = { telegram: '✓ TG', facebook: '✓ FB', threads: '✓ Threads', instagram: '✓ IG' };
       if (!confirm('Publish to ' + names[platform] + '?')) return;
       btn.disabled = true;
       btn.textContent = '⏳...';
@@ -726,9 +736,11 @@
         if (!res.ok) throw new Error(data.error || 'Server error');
 
         const result = data.published?.[platform];
-        // Threads success = all 3 standalone posts, not just "some id came back".
+        // Threads/Instagram success = all 3 standalone posts, not just "some id came back".
         const succeeded = platform === 'threads'
           ? (result?.threadIds?.length === 3 && !result?.error)
+          : platform === 'instagram'
+          ? (result?.mediaIds?.length === 3 && !result?.error)
           : (result?.postId || result?.messageId);
         if (succeeded) {
           btn.className = 'plat-btn sent';

@@ -2,6 +2,7 @@ import { publishToFacebook } from './facebook.js';
 import { publishToTelegram } from './telegram.js';
 import { publishToYouTube } from './youtube.js';
 import { publishThreadsChain } from './threads-publisher.js';
+import { publishInstagramTop3 } from './instagram-publisher.js';
 import { updateDigest } from '../../db/index.js';
 
 /**
@@ -9,8 +10,8 @@ import { updateDigest } from '../../db/index.js';
  *
  * @param {Object} digest     - Digest record from DB (must have id and content)
  * @param {Object} config     - App config object
- * @param {string[]} platforms - Optional: ["telegram", "facebook", "youtube", "threads"]. If omitted, publishes to all enabled.
- * @returns {{ facebook, telegram, youtube, threads }} results per platform (or null if skipped)
+ * @param {string[]} platforms - Optional: ["telegram", "facebook", "youtube", "threads", "instagram"]. If omitted, publishes to all enabled.
+ * @returns {{ facebook, telegram, youtube, threads, instagram }} results per platform (or null if skipped)
  */
 export async function publishDigest(digest, config, platforms) {
   const all = !platforms || !Array.isArray(platforms) || platforms.length === 0;
@@ -21,6 +22,7 @@ export async function publishDigest(digest, config, platforms) {
     telegram: null,
     youtube: null,
     threads: null,
+    instagram: null,
   };
 
   const updateFields = {};
@@ -101,12 +103,37 @@ export async function publishDigest(digest, config, platforms) {
     }
   }
 
+  // Instagram — mirrors the Threads pattern: 'published' only when all 3
+  // TOP3 feed posts succeeded, never on a partial run. instagram_media_ids is
+  // always persisted (even on partial/failure) so publishInstagramTop3() can
+  // resume from the first item that never posted on the next attempt. An
+  // empty/missing cards_json makes every item fail closed (no image, no
+  // post) — this block still only ever touches instagram_* fields, so that
+  // failure never blocks or alters the other platforms above.
+  if (shouldPublish('instagram') && config.instagramAccountId && config.instagramAccessToken) {
+    try {
+      results.instagram = await publishInstagramTop3(digest, config);
+    } catch (err) {
+      console.error('[publishers] Unexpected Instagram publish error:', err.message);
+      results.instagram = { mediaIds: [], error: `Unexpected error: ${err.message}` };
+    }
+
+    updateFields.instagram_media_ids = JSON.stringify(results.instagram?.mediaIds || []);
+    if (results.instagram?.mediaIds?.length === 3 && !results.instagram.error) {
+      updateFields.instagram_status = 'published';
+      updateFields.instagram_error = null;
+    } else {
+      updateFields.instagram_status = 'failed';
+      updateFields.instagram_error = results.instagram?.error || 'Unknown Instagram publish failure';
+    }
+  }
+
   // A genuine success (not just facebook_status/facebook_error bookkeeping)
   // is what flips the digest to 'published' — a Facebook failure alone must
   // not mark the digest as published.
   const hasGenuineSuccess = Boolean(
     updateFields.facebook_post_id || updateFields.telegram_message_id || updateFields.youtube_post_id ||
-    updateFields.threads_status === 'published'
+    updateFields.threads_status === 'published' || updateFields.instagram_status === 'published'
   );
   if (hasGenuineSuccess) {
     updateFields.status = 'published';

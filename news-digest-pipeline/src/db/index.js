@@ -93,9 +93,23 @@ export function initDb(dbPath) {
   if (!digestCols.has('cards_json')) {
     // JSON array of {idx, articleId, url} for the 3 TOP3 headline card PNGs
     // (card-generator.js), set once at first publish attempt and reused on
-    // retries — publisher-agnostic so Threads and a future IG publisher both
+    // retries — publisher-agnostic so Threads and the IG publisher both
     // read this same field. NULL until PUBLIC_MEDIA_BASE_URL is configured.
     db.exec('ALTER TABLE digests ADD COLUMN cards_json TEXT');
+  }
+  if (!digestCols.has('instagram_status')) {
+    // 'published' | 'failed' | NULL (never attempted) — same contract as
+    // threads_status/facebook_status: only 'published' when all 3 TOP3 feed
+    // posts succeeded, never on a partial run.
+    db.exec('ALTER TABLE digests ADD COLUMN instagram_status TEXT');
+  }
+  if (!digestCols.has('instagram_error')) {
+    db.exec('ALTER TABLE digests ADD COLUMN instagram_error TEXT');
+  }
+  if (!digestCols.has('instagram_media_ids')) {
+    // JSON array of however many media ids succeeded before stopping (0-3
+    // entries), in item order — same resumability contract as threads_thread_ids.
+    db.exec('ALTER TABLE digests ADD COLUMN instagram_media_ids TEXT');
   }
 
   db.exec(`
@@ -262,7 +276,8 @@ export function updateDigest(id, fields) {
   const allowed = ['content', 'status', 'generation_log', 'published_at',
     'facebook_post_id', 'facebook_status', 'facebook_error', 'telegram_message_id', 'youtube_post_id', 'articles_count',
     'model', 'input_tokens', 'output_tokens', 'cost_usd', 'script_warning',
-    'threads_status', 'threads_error', 'threads_thread_ids', 'cards_json'];
+    'threads_status', 'threads_error', 'threads_thread_ids', 'cards_json',
+    'instagram_status', 'instagram_error', 'instagram_media_ids'];
   const updates = [];
   const values = [];
 

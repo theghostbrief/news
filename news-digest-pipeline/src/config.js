@@ -211,10 +211,16 @@ function buildConfig() {
     // by default → card generation is skipped and publishing stays text-only.
     publicMediaBaseUrl: process.env.PUBLIC_MEDIA_BASE_URL || '',
 
+    // Instagram — TOP3 feed posts (image + caption), container->publish flow
+    // like Threads (see instagram-publisher.js). Reuses the same long-lived
+    // Page token as Facebook rather than a separate auth flow.
+    instagramAccountId: process.env.INSTAGRAM_ACCOUNT_ID || '',
+    instagramAccessToken: process.env.INSTAGRAM_ACCESS_TOKEN || '',
+    // Prefix for the link line appended to every IG caption, e.g. "Full brief: <link>".
+    instagramLinkText: process.env.INSTAGRAM_LINK_TEXT || 'Full brief:',
+
     // Planned integrations (placeholders for status display only — pipelines
     // are not implemented yet).
-    instagramAccessToken: process.env.INSTAGRAM_ACCESS_TOKEN || '',
-    instagramAccountId: process.env.INSTAGRAM_ACCOUNT_ID || '',
     tiktokAccessToken: process.env.TIKTOK_ACCESS_TOKEN || '',
 
     // Comment moderation (pro cluster). These keys are core/shared: harmless in

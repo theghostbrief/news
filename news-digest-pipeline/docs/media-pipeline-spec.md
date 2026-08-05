@@ -500,25 +500,33 @@ REEL_OFFSETS_MIN=30,240,540      # minutes after digest publish
 - **Jina API key for Perplexity fetch** — moves Jina Reader off the anonymous
   rate limit (`JINA_API_KEY`). Outside media-pipeline scope; recorded here for
   continuity with the rest of this status list.
+- **Instagram TOP3 auto-posting** (2026-08-05) — `src/services/publishers/
+  instagram-publisher.js`, image (the existing TOP3 card) + caption per
+  top-3 item via the Meta Graph API, same container→publish flow as Threads
+  (§11.3), reusing the Facebook Page long-lived token (`INSTAGRAM_ACCOUNT_ID`
+  / `INSTAGRAM_ACCESS_TOKEN`). Immediate/synchronous — posts all 3 back to
+  back, no scheduling yet. Unlike Threads there's no TEXT-only fallback: IG
+  feed posts require an image, so an item with no matching `cards_json` entry
+  fails closed (that item, and the run, stop there) rather than degrading to
+  text. Resumable via `digests.instagram_media_ids`, same contract as
+  `threads_thread_ids`. Wired into `publishers/index.js` as its own
+  independent block (own try/catch, own `instagram_status`/`instagram_error`
+  fields) so a card-less or failing IG run never blocks Facebook/Telegram/
+  Threads.
 
 ### Next up, in order
-1. **Instagram TOP3 auto-posting.** Image (the existing TOP3 card) + caption
-   per top-3 item via the Meta Graph API — same container→publish flow as
-   Threads (§11.3), reusing the existing System User token rather than a new
-   auth flow. Build the immediate/synchronous version first (post all 3 back
-   to back, like Threads today) — no scheduling yet.
-2. **Staggered post scheduling.** 10–20 min delays between the 3 TOP3 posts,
-   applied to both IG and Threads. A layer on top of #1, not a prerequisite
-   for it: one `publish_queue` row per post (table already defined in §3;
-   `kind` already anticipates values beyond the reel kinds listed there) with
-   a small poller picking up due rows, replacing the immediate back-to-back
-   posting from #1.
-3. **Website images.** Populate `articles.image_url` (column already exists,
+1. **Staggered post scheduling.** 10–20 min delays between the 3 TOP3 posts,
+   applied to both IG and Threads. A layer on top of the shipped work above,
+   not a prerequisite for it: one `publish_queue` row per post (table already
+   defined in §3; `kind` already anticipates values beyond the reel kinds
+   listed there) with a small poller picking up due rows, replacing the
+   immediate back-to-back posting shipped for both platforms.
+2. **Website images.** Populate `articles.image_url` (column already exists,
    unpopulated — see the migration note in `db/index.js`): capture at fetch
    time, render on the public reader page.
-4. **Public page design pass.** `src/public-site/index.html`'s visual design
+3. **Public page design pass.** `src/public-site/index.html`'s visual design
    (currently a plain cream/violet reader layout).
-5. **P1 audio — segment TTS + podcast RSS.** `segmenter.js` already ships
+4. **P1 audio — segment TTS + podcast RSS.** `segmenter.js` already ships
    (built for the public reader page — parses the same SEG/TOP3 markers this
    whole pipeline depends on). Remaining: `tts.js`, `buildPodcastAudio`,
    podcast publisher (§4.8), dashboard badge.
